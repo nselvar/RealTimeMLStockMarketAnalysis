@@ -1,0 +1,3223 @@
+---
+title: "Use Machine Learning To Possibly Become A Millionaire: Predicting The Stock Market?"
+author: "Nisha Selvarajan"
+date: "11/19/2020"
+output:
+  pdf_document:
+      toc: yes
+      toc_depth: 4
+      latex_engine: xelatex
+      #toc_float: true
+  html_document:
+      theme: journal
+      toc: yes
+      toc_depth: 4
+      #toc_float: true
+  word_document:
+      toc: yes
+      toc_depth: 4
+      #toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Objectives: 
+
+***Use Machine Learning To Possibly Become A Millionaire: Predicting The Stock Market?***
+The stock market is one of the most well-known infrastructures through which anyone can potentially make a fortune. If anyone could crack the code to predicting what future stock prices are, they’ll practically rule the world.here’s just one problem. It’s pretty much impossible to accurately predict the future of the stock market. 
+
+In this project, we will work with historical data about the stock prices of a publicly listed company. We will implement a mix of machine learning algorithms to predict the future stock price of the company, starting with simple algorithm like  linear regression, and then move on to advanced techniques like Auto ARIMA and Neural Networks.
+
+```{r, message = FALSE, echo=FALSE}
+library( splines)
+library("neuralnet")
+library("quantmod")
+library("rpart")
+library("rpart.plot")
+library(AppliedPredictiveModeling)
+library(DT)
+library(DataExplorer)
+library(Hmisc)
+library(ISLR)
+library(MLeval)
+library(NeuralNetTools)
+library(RColorBrewer)
+library(ROCR)
+library(broom)
+library(caTools)
+library(car)
+library(caret)
+library(class)
+library(corrplot)
+library(cowplot)
+library(data.table)
+library(dplyr)
+library(e1071)
+library(fmsb)
+library(forecast)
+library(funModeling)
+library(ggcorrplot)
+library(ggfortify) 
+library(ggplot2)
+library(gmodels)
+library(gridExtra)
+library(kknn)
+library(knitr)
+library(lattice)
+library(leaps)
+library(lubridate)
+library(mgcv)
+library(multiROC)
+library(nnet)
+library(pROC)
+library(packHV)
+library(pander)
+library(party)
+library(psych)
+library(quantmod)
+library(randomForest)
+library(readxl)
+library(reshape2)
+library(rpart)
+library(rpart.plot)
+library(scales)
+library(scatterplot3d)
+library(tidyverse)
+library(timeSeries)
+library(tseries)
+library(tsfknn)
+library(visreg)
+options(warn  = -1)
+options(warn=-1)
+theme_set(theme_classic())
+```
+
+### Data Import### 
+
+  + The data set we will be working with is from the New York Stock Exchange (NYSE) and represent the historical prices and other fundamental data points of the S&P 500 from 2010 to the end of 2016.
+Dataset consists of following files:
+
+  + prices.csv: raw, as-is daily prices. Most of data spans from 2010 to the end 2016, for companies new on stock market date range is shorter. There have been approx. 140 stock splits in that time, this set doesn't account for that.
+  + prices-split-adjusted.csv: same as prices, but there have been added adjustments for splits.
+  + securities.csv: general description of each company with division on sectors
+  + fundamentals.csv: metrics extracted from annual SEC 10K fillings (2012-2016), should be enough to derive most of popular fundamental indicators.
+  + The majority of our focus will be on the prices-split-adjusted.csv file, as this contains the adjusted prices for the stocks we will be trying to predict.
+
+```{r, message = FALSE, echo=FALSE}
+fund <- read.csv("/Users/nselvarajan/Desktop/R/finals/datasets1/fundamentals.csv", header=T)
+sprice <- read.csv("/Users/nselvarajan/Desktop/R/finals/datasets1/prices-split-adjusted.csv", header=T)
+sec <- read.csv("/Users/nselvarajan/Desktop/R/finals/datasets1/securities.csv", header=T)
+```
+
+\pagebreak
+
+***Description of fundamentals.csv***
+
+```{r, message = FALSE, echo=FALSE}
+library(kableExtra)
+df <- data.frame(Names = c("Stocks Variable Columns",
+                           "Stocks Technical Indicator Columns"),
+                  Description = c("Categorical - Ticker.Symbol,Period.Ending",
+                           "Numerical -  Accounts.Payable,\n 
+Accounts.Receivable, Add.l.income.expense.items,\n
+After.Tax.ROE, Capital.Expenditures,\n
+Capital.Surplus, Cash.Ratio,\n
+Cash.and.Cash.Equivalents,\n
+Changes.in.Inventories,Common.Stocks,\n  
+Cost.of.Revenue,Current.Ratio,\n
+Deferred.Asset.Charges,Total.Assets,\n
+Deferred.Liability.Charges,\n 
+Depreciation,Earnings.Before.Interest.and.Tax,\n
+Earnings.Before.Tax,Net.Income.Adjustments,\n     
+Effect.of.Exchange.Rate,\n    
+Equity.Earnings.Loss.Unconsolidated.Subsidiary,\n
+Fixed.Assets,Goodwill,Gross.Margin,\n
+Gross.Profit,Income.Tax,\n     
+Intangible.Assets,Interest.Expense,\n     
+Inventory,Investments,Liabilities,\n  
+Long.Term.Debt,Long.Term.Investments,\n
+Minority.Interest,Misc..Stocks,\n   
+Net.Borrowings,Net.Cash.Flow ,\n 
+Net.Cash.Flow.Operating,Net.Cash.Flows.Financing, \n  
+Net.Cash.Flows.Investing,Net.Income,\n     
+Net.Income.Applicable.to.Common.Shareholders, \n
+Net.Income.Cont..,Operations,\n
+Net.Receivables,Non.Recurring.Items,\n
+Operating.Income,Operating.Margin,\n   
+Other.Assets,Other.Current.Assets,\n
+Other.Current.Liabilities,\n 
+Other.Equity,Other.Financing.Activities,\n 
+Other.Investing.Activities,Other.Liabilities,\n   
+Other.Operating.Activities,Pre.Tax.Margin\n
+Other.Operating.Items,Pre.Tax.ROE,\n   
+Profit.Margin,Quick.Ratio,\n    
+Research.and.Development,\n   
+Retained.Earnings,Short.Term.Debt\n
+Sale.and.Purchase.of.Stock,\n 
+Sales..General.and.Admin.,\n  
+Current.Portion.of.Long.Term.Debt,\n
+Short.Term.Investments,Equity,\n 
+Total.Current.Assets,For.Year\n
+Total.Current.Liabilities,\n  
+Total.Equity,Total.Liabilities,\n   
+Total.Revenue,Treasury.Stock,\n 
+Earnings.Per.Share,\n  
+Estimated.Shares.Outstanding"
+))
+
+kbl(df)%>%
+kable_paper(full_width = F) %>%
+column_spec(2, width = "30em")
+```
+\pagebreak
+***Description of securities.csv***
+
+```{r, message = FALSE, echo=FALSE}
+
+df <- data.frame(Names = c("Ticker.symbol",
+                          "GICS.Sector","GICS.Sub.Industry"),
+                  Description = c(
+                           "Categorical - Ticker.Symbol",
+                           "Categorical -Industry of the ticker",
+                           "Categorical -Sub.Industry of the ticker"))
+
+kbl(df)%>%
+kable_paper(full_width = F) %>%
+  column_spec(2, width = "30em")
+
+```
+***Description of sprice.csv***
+
+```{r, message = FALSE, echo=FALSE}
+
+df <- data.frame(Names = c("Date",
+                          "Symbol","Open","Close","Low","High","Volume"),
+Description = c("Date - Date for which prices are recorded",
+"Categorical - Ticker.Symbol",
+"Numerical - Opening price of the stock on a particular day",
+"Numerical - Closing price of the stock on a particular day",
+"Numerical -Low price of the stock on a particular day",
+"Numerical -High price of the stock on a particular day",
+"Numerical -Volume  of the stock on a particular day"))
+
+kbl(df)%>%
+kable_paper(full_width = F) %>%
+column_spec(2, width = "30em")
+
+```
+\pagebreak
+
+***Data Structure and manipulation.***
+
++ Merge the  three dataframe to combine information about a stock grouped by year.
++ Filter out unnecessary columns and display the final dataset which we will work on.
++ Final data after merging info from three dataframes
+  
+```{r pressure, echo=FALSE}
+sprice$date <- ymd(sprice$date)
+sprice$year <- year(sprice$date)
+annual.sp <- aggregate(close ~ symbol + year, sprice, mean)
+
+#Add Industry (From SEC) to fundamentals (FUND)
+names(sec)[names(sec)=="Ticker.symbol"] <- "Ticker.Symbol"
+sec.short <- sec[,c(1,4,5)]
+data <- merge(fund,sec.short, by="Ticker.Symbol", all.x=TRUE)
+
+#Time Parse
+data$Period.Ending <- ymd(data$Period.Ending)
+data$endyear <- year(data$Period.Ending)
+data$quarter <- quarter(data$Period.Ending)
+#Add annual split-adj Stock Price to Fundamentals
+annual.sp$index <- paste(as.character(annual.sp$symbol), annual.sp$year, sep=" ")
+
+data$index <- paste(as.character(data$Ticker.Symbol), data$endyear, sep=" ")
+data<- merge(data, annual.sp[,3:4], by = "index", all.x=TRUE)
+names(data)[names(data)=="close"] <- "Stock.p"
+names(data)[names(data)=="GICS.Sector"] <- "Industry"
+data <- subset(data, endyear > 2012 & endyear < 2016) #Remove Outliers
+data$Period.Ending <- as.Date(data$Period.Ending)
+data$Year <- year(data$Period.Ending)
+data <- data[,c(2,9,11,15,19,20,22,24,27,32,33,34,35,39,43,61,62,65,71,72,73,74,76,79,80,81,83,84,85,86)]
+```
+
+```{r, message = FALSE, echo=FALSE}
+
+df <- data.frame(Names = c("Ticker.Symbol",                 
+"Industry",                        
+"endyear",
+"quarter",
+"Stock.p",
+"Capital.Expenditures",         
+"Cash.Ratio",                   
+"Cost.of.Revenue",               
+"Depreciation",                    
+"Earnings.Before.Interest.and.Tax",
+"Effect.of.Exchange.Rate",        
+"Fixed.Assets",                    
+"Gross.Profit",                   
+"Investments",                    
+"Liabilities",                    
+"Long.Term.Debt",                 
+"Long.Term.Investments",       
+"Net.Cash.Flow",                  
+"Net.Income",                     
+"Pre.Tax.ROE",                    
+"Profit.Margin",                   
+"Retained.Earnings",              
+"Total.Current.Assets",           
+"Total.Current.Liabilities",       
+"Total.Equity",                    
+"Total.Liabilities",               
+"Total.Revenue",                   
+"Earnings.Per.Share",              
+"Estimated.Shares.Outstanding"),
+                  Description = c(
+                           "Categorical - Stock Symbol",                 
+"Categorical - Idustry of the Stock",                        
+"Date - Year of the revenue",
+"Date - Quarter of the revenue",
+"Numerical - Mean of Close price",
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator",         
+"Numerical - Technical Indicator"))
+
+kbl(df)%>%
+ kable_paper(full_width = F) %>%
+ column_spec(2, width = "30em")
+data$Effect.of.Exchange.Rate <- NULL
+data$Market.Cap <- data$Stock.p*data$Estimated.Shares.Outstanding
+data <- subset(data, Estimated.Shares.Outstanding > 0)
+
+#2013 to 2015, FULL DATA
+data <- subset(data, Year > 2013 & Year < 2016)
+data <- na.omit(data)
+data <- subset(data, Industry != "Telecommunications Services")
+data$Industry <- as.factor(as.character(data$Industry))
+
+#Since Telecom is too small, Remove from dataset
+tt <- table(data$Ticker.Symbol)
+data <- subset(data, Ticker.Symbol %in% names(tt[tt == 2]))
+data$Ticker.Symbol <- as.factor(as.character(data$Ticker.Symbol))
+data <- data[,-c(12,14)]
+
+```
+\pagebreak
+### Data Science Analysis
+
++ Plot the percentage of missing data for each attribute.
+
+```{r, message = FALSE, echo=FALSE}
+data$X <- NULL
+nam <- names(data)
+plot_missing(data)
+
+correlated_data <- data
+correlated_data$Ticker.Symbol <-as.factor(data$Ticker.Symbol)
+correlated_data$quarter <-as.factor(data$quarter)
+correlated_data$Year <-as.factor(data$Year)
+correlated_data$Industry <-as.factor(data$Industry)
+correlated_data$endyear <-as.factor(data$endyear)
+correlated_data$Capital.Expenditures <-as.numeric(data$Capital.Expenditures)
+correlated_data$Cost.of.Revenue <-as.numeric(data$Cost.of.Revenue)
+correlated_data$Earnings.Before.Interest.and.Tax <-as.numeric(data$Earnings.Before.Interest.and.Tax)
+correlated_data$Gross.Profit <-as.numeric(data$Gross.Profit)
+correlated_data$Liabilities <-as.numeric(data$Liabilities)
+correlated_data$Net.Cash.Flow <-as.numeric(data$Net.Cash.Flow)
+correlated_data$Profit.Margin <-as.numeric(data$Profit.Margin)
+correlated_data$Total.Current.Assets <-as.numeric(data$Total.Current.Assets)
+correlated_data$Total.Equity <-as.numeric(data$Total.Equity)
+correlated_data$Total.Revenue <-as.numeric(data$Total.Revenue)
+correlated_data$Estimated.Shares.Outstanding <-as.numeric(data$Estimated.Shares.Outstanding)
+correlated_data$Stock.p <-as.numeric(data$Stock.p)
+correlated_data$Market.Cap <-as.numeric(data$Market.Cap)
+correlated_data$Cash.Ratio <-as.numeric(data$Cash.Ratio)
+correlated_data$Depreciation <-as.numeric(data$Depreciation)
+correlated_data$Fixed.Assets <-as.numeric(data$Fixed.Assets)
+correlated_data$Investments <-as.numeric(data$Investments)
+correlated_data$Long.Term.Debt <-as.numeric(data$Long.Term.Debt)
+correlated_data$Pre.Tax.ROE <-as.numeric(data$Pre.Tax.ROE)
+correlated_data$Retained.Earnings <-as.numeric(data$Retained.Earnings)
+correlated_data$Total.Current.Liabilities <-as.numeric(data$Total.Current.Liabilities)
+correlated_data$Total.Liabilities <-as.numeric(data$Total.Liabilities)
+correlated_data$Earnings.Per.Share <-as.numeric(data$Earnings.Per.Share)
+```
+\pagebreak
+
++ Correlation plot with correlation coefficient before data clean up
+
+```{r, message = FALSE, echo=FALSE}
+
+correlated_dataforanalysis <- correlated_data[,c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,26,28)]
+#correlation plot
+nam <- names(correlated_dataforanalysis)
+
+correlation_r <- rcorr(as.matrix(correlated_dataforanalysis))
+correlation_Matrix <- correlation_r$r
+p_mat <- correlation_r$P
+
+
+corr_graph<-corrplot(correlation_Matrix, type = "upper", order = "hclust", 
+                      tl.srt = 50, tl.col = "black", tl.cex = 0.6, rect.lwd = 30,
+         number.cex=0.25,p.mat = p_mat, sig.level = 0.05)
+
+#par(mfrow = c(1, 1))
+#cat(paste(""))
+#plot(1,1,axes=FALSE)
+cor <- cor(correlated_dataforanalysis)
+
+colnames(cor) <- c("Capital.Expenditures", "Cash.Ratio", 
+                   "Cost.of.Revenue","Depreciation",
+                   "Earnings.Before.Interest.and.Tax","Fixed.Assets",
+                   "Gross.Profit","Investments",
+                   "Liabilities","Long.Term.Debt",
+                   "Net.Cash.Flow","Pre.Tax.ROE",
+                   "Profit.Margin","Retained.Earnings",
+                   "Total.Current.Assets","Total.Current.Liabilities",
+                   "Total.Equity" ,"Total.Liabilities", 
+                   "Total.Revenue" ,"Earnings.Per.Share",
+                   "Estimated.Shares.Outstanding","Stock.p","Market.Cap")
+rownames(cor) <-c("Capital.Expenditures", "Cash.Ratio", 
+                  "Cost.of.Revenue","Depreciation",
+                  "Earnings.Before.Interest.and.Tax","Fixed.Assets",
+                  "Gross.Profit","Investments",
+                  "Liabilities","Long.Term.Debt",
+                  "Net.Cash.Flow","Pre.Tax.ROE",
+                  "Profit.Margin","Retained.Earnings",
+                  "Total.Current.Assets","Total.Current.Liabilities",
+                  "Total.Equity" ,"Total.Liabilities", 
+                  "Total.Revenue" ,"Earnings.Per.Share",
+                  "Estimated.Shares.Outstanding","Stock.p","Market.Cap")
+
+
+cat(paste("Corrplot With Correlation Coefficient"))
+
+corrplot(correlation_Matrix, method = "number",  type="full",
+         tl.srt = 50, tl.col = "black", tl.cex = 0.6, 
+         number.cex=0.25,
+         mar=c(0,0,1,0)
+)
+
+```
+
++ Remove outliers of the features and replace them with the mean of the value.
++ Replacing the missing values with the mean / median / mode is a best way of treating missing values. + Depending on the context, like if the variation is low or if the variable has low leverage over the   response, such a rough approximation is acceptable and could possibly give satisfactory results.
+
+```{r, message = FALSE, echo=FALSE}
+
+par(mfrow=c(2,2))
+
+dataforanalysis <- correlated_data
+
+outliers <- boxplot(correlated_data$Cost.of.Revenue, main = "Revenue",
+                    ylab = "Cost.of.Revenue",
+                    col = "orange",
+                    border = "brown")$out
+#mean(correlated_data$Cost.of.Revenue)
+correlated_data[correlated_data$Cost.of.Revenue %in% outliers, "Cost.of.Revenue"] = mean(correlated_data$Cost.of.Revenue)
+boxplot(correlated_data$Cost.of.Revenue,
+        main = "Cleaned Revenue",
+        ylab = "Cost.of.Revenue",
+        col = "orange",
+        border = "brown")
+
+outliersDepreciation <- boxplot(correlated_data$Depreciation,
+                                main = "Depreciation",
+                                ylab = "Depreciation",
+                                col = "orange",
+                                border = "brown")$out
+#mean(correlated_data$Depreciation)
+correlated_data[correlated_data$Depreciation %in% outliersDepreciation, "Depreciation"] = mean(correlated_data$Depreciation)
+boxplot(correlated_data$Depreciation,
+        main = "Cleaned Depreciation",
+        ylab = "Depreciation",
+        col = "orange",
+        border = "brown")
+
+
+outliersEarningsBeforeInterestTax <- boxplot(correlated_data$Earnings.Before.Interest.and.Tax,
+                                             main = "Earnings Before InterestTax",
+                                             ylab = "Earnings Before InterestTax",
+                                             col = "orange",
+                                             border = "brown")$out
+#mean(correlated_data$Earnings.Before.Interest.and.Tax)
+correlated_data[correlated_data$Earnings.Before.Interest.and.Tax %in% outliersEarningsBeforeInterestTax, "Earnings.Before.Interest.and.Tax"] = mean(correlated_data$Earnings.Before.Interest.and.Tax)
+boxplot(correlated_data$Earnings.Before.Interest.and.Tax,
+        main = "Cleaned EarningsBeforeInterestTax",
+        ylab = "Earnings Before InterestTax",
+        col = "orange",
+        border = "brown")
+
+
+outliersFixed.Assets <- boxplot(correlated_data$Fixed.Assets,
+                                main = "Fixed.Assets ",
+                                ylab = "Fixed.Assets",
+                                col = "orange",
+                                border = "brown")$out
+#mean(correlated_data$Fixed.Assets)
+correlated_data[correlated_data$Fixed.Assets %in% outliersFixed.Assets, "Fixed.Assets"] = mean(correlated_data$Fixed.Assets)
+boxplot(correlated_data$Fixed.Assets,
+        main = "Cleaned Fixed Assets",
+        ylab = "Fixed.Assets",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersGross.Profit <- boxplot(correlated_data$Gross.Profit,
+                                main = "Gross Profit",
+                                ylab = "Gross Profit",
+                                col = "orange",
+                                border = "brown")$out
+#mean(correlated_data$Gross.Profit)
+correlated_data[correlated_data$Gross.Profit %in% outliersGross.Profit, "Gross.Profit"] = mean(correlated_data$Gross.Profit)
+boxplot(correlated_data$Gross.Profit,
+        main = "Cleaned Gross Profit",
+        ylab = "Gross.Profit",
+        col = "orange",
+        border = "brown")
+
+
+
+
+outliersLiabilities <- boxplot(correlated_data$Liabilities,
+                               main = "Liabilities",
+                               ylab = "Liabilities",
+                               col = "orange",
+                               border = "brown")$out
+#mean(correlated_data$Liabilities)
+correlated_data[correlated_data$Liabilities %in% outliersLiabilities, "Liabilities"] = mean(correlated_data$Liabilities)
+boxplot(correlated_data$Liabilities,
+        main = "Cleaned Liabilities",
+        ylab = "Liabilities",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersLongTermDebt <- boxplot(correlated_data$Long.Term.Debt,
+                                main = "Long.Term.Debt",
+                                ylab = "Long.Term.Debt",
+                                col = "orange",
+                                border = "brown")$out
+#mean(correlated_data$Long.Term.Debt)
+correlated_data[correlated_data$Long.Term.Debt %in% outliersLongTermDebt, "Long.Term.Debt"] = mean(correlated_data$Long.Term.Debt)
+boxplot(correlated_data$Long.Term.Debt,
+        main = "Cleaned Long Term Debt",
+        ylab = "Long Term Debt",
+        col = "orange",
+        border = "brown")
+
+
+
+
+outliersRetained.Earnings <- boxplot(correlated_data$Retained.Earnings,
+                                     main = "Retained.Earnings",
+                                     ylab = "Retained.Earnings",
+                                     col = "orange",
+                                     border = "brown")$out
+#mean(correlated_data$Retained.Earnings)
+correlated_data[correlated_data$Retained.Earnings %in% outliersRetained.Earnings, "Retained.Earnings"] = mean(correlated_data$Retained.Earnings)
+boxplot(correlated_data$Retained.Earnings,
+        main = "Cleaned Retained.Earnings",
+        ylab = "Retained.Earnings",
+        col = "orange",
+        border = "brown")
+
+
+
+
+outliersTotal.Liabilities <- boxplot(correlated_data$Total.Liabilities,
+                                     main = "Total.Liabilities",
+                                     ylab = "Total.Liabilities",
+                                     col = "orange",
+                                     border = "brown")$out
+#mean(correlated_data$Total.Liabilities)
+correlated_data[correlated_data$Total.Liabilities %in% outliersTotal.Liabilities, "Total.Liabilities"] = mean(correlated_data$Total.Liabilities)
+boxplot(correlated_data$Total.Liabilities,
+        main = "Cleaned Total.Liabilities",
+        ylab = "Total.Liabilities",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersTotal.Revenue <- boxplot(correlated_data$Total.Revenue,
+                                 main = "Total.Revenue",
+                                 ylab = "Total.Revenue",
+                                 col = "orange",
+                                 border = "brown")$out
+#mean(correlated_data$Total.Revenue)
+correlated_data[correlated_data$Total.Revenue %in% outliersTotal.Revenue, "Total.Revenue"] = mean(correlated_data$Total.Revenue)
+boxplot(correlated_data$Total.Revenue,
+        main = "Cleaned Total.Revenue",
+        ylab = "Total.Revenue",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersTotal.Equity <- boxplot(correlated_data$Total.Equity,
+                                main = "Total.Equity",
+                                ylab = "Total.Equity",
+                                col = "orange",
+                                border = "brown")$out
+#mean(correlated_data$Total.Equity)
+correlated_data[correlated_data$Total.Equity %in% outliersTotal.Equity, "Total.Equity"] = mean(correlated_data$Total.Equity)
+boxplot(correlated_data$Total.Equity,
+        main = "Cleaned Total.Equity",
+        ylab = "Total.Equity",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersEarnings.Per.Share <- boxplot(correlated_data$Earnings.Per.Share,
+                                      main = "Earnings.Per.Share ",
+                                      ylab = "Earnings.Per.Share",
+                                      col = "orange",
+                                      border = "brown")$out
+#mean(correlated_data$Earnings.Per.Share)
+correlated_data[correlated_data$Earnings.Per.Share %in% outliersEarnings.Per.Share, "Earnings.Per.Share"] = mean(correlated_data$Earnings.Per.Share)
+boxplot(correlated_data$Earnings.Per.Share,
+        main = "Cleaned Earnings.Per.Shares",
+        ylab = "Earnings.Per.Share",
+        col = "orange",
+        border = "brown")
+
+
+
+
+outliersStock.p <- boxplot(correlated_data$Stock.p,
+                           main = "Stock.p",
+                           ylab = "Stock.p",
+                           col = "orange",
+                           border = "brown")$out
+#mean(correlated_data$Stock.p)
+correlated_data[correlated_data$Stock.p %in% outliersStock.p, "Stock.p"] = mean(correlated_data$Stock.p)
+boxplot(correlated_data$Stock.p,
+        main = "Cleaned Stock.p",
+        ylab = "Stock.p",
+        col = "orange",
+        border = "brown")
+
+
+
+outliersEstimated.Shares.Outstanding <- boxplot(correlated_data$Estimated.Shares.Outstanding,
+                                                main = "Estimated.Shares.Outstanding",
+                                                ylab = "Estimated.Shares.Outstanding",
+                                                col = "orange",
+                                                border = "brown")$out
+#mean(correlated_data$Estimated.Shares.Outstanding)
+correlated_data[correlated_data$Estimated.Shares.Outstanding %in% outliersEstimated.Shares.Outstanding, "Estimated.Shares.Outstanding"] = mean(correlated_data$Estimated.Shares.Outstanding)
+boxplot(correlated_data$Estimated.Shares.Outstanding,
+        main = "Cleaned Estimated.Shares.Outstanding",
+        ylab = "Estimated.Shares.Outstanding",
+        col = "orange",
+        border = "brown")
+
+outliersMarket.Cap <- boxplot(correlated_data$Market.Cap,border=c("white"),width=1,col = "white",axes=FALSE,outline=FALSE
+)$out
+#mean(correlated_data$Market.Cap)
+correlated_data[correlated_data$Market.Cap %in% outliersMarket.Cap, "Market.Cap"] = mean(correlated_data$Market.Cap)
+outliersMarket.Cap <- boxplot(correlated_data$Market.Cap,
+border=c("white"),width=1,
+                              col = "white",axes=FALSE,outline=FALSE
+                              )$out
+#mean(correlated_data$Market.Cap)
+correlated_data[correlated_data$Market.Cap %in% outliersMarket.Cap, "Market.Cap"] = mean(correlated_data$Market.Cap)
+
+
+boxplot(correlated_data$Market.Cap,
+        border=c("white"),width=1,col = "white",axes=FALSE,outline=FALSE)
+
+par(mfrow=c(1,1))
+
+```
+\pagebreak
+
++ Correlation plot with correlation coefficient after data clean up
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+correlated_data <- correlated_data[,c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,26,28)]
+#correlation plot
+nam <- names(correlated_data)
+
+correlation_r <- rcorr(as.matrix(correlated_data))
+correlation_Matrix <- correlation_r$r
+p_mat <- correlation_r$P
+
+
+
+cor <- cor(correlated_data)
+
+colnames(cor) <- c("Capital.Expenditures", "Cash.Ratio", 
+                   "Cost.of.Revenue","Depreciation",
+                   "Earnings.Before.Interest.and.Tax","Fixed.Assets",
+                   "Gross.Profit","Investments",
+                   "Liabilities","Long.Term.Debt",
+                   "Net.Cash.Flow","Pre.Tax.ROE",
+                   "Profit.Margin","Retained.Earnings",
+                   "Total.Current.Assets","Total.Current.Liabilities",
+                   "Total.Equity" ,"Total.Liabilities", 
+                   "Total.Revenue" ,"Earnings.Per.Share",
+                   "Estimated.Shares.Outstanding","Stock.p","Market.Cap")
+rownames(cor) <-c("Capital.Expenditures", "Cash.Ratio", 
+                  "Cost.of.Revenue","Depreciation",
+                  "Earnings.Before.Interest.and.Tax","Fixed.Assets",
+                  "Gross.Profit","Investments",
+                  "Liabilities","Long.Term.Debt",
+                  "Net.Cash.Flow","Pre.Tax.ROE",
+                  "Profit.Margin","Retained.Earnings",
+                  "Total.Current.Assets","Total.Current.Liabilities",
+                  "Total.Equity" ,"Total.Liabilities", 
+                  "Total.Revenue" ,"Earnings.Per.Share",
+                  "Estimated.Shares.Outstanding","Stock.p","Market.Cap")
+corrplot(correlation_Matrix, method = "number",  type="full",
+         tl.srt = 50, tl.col = "black", tl.cex = 0.6, title = "Correlation of Variables",
+         number.cex=0.25,
+         mar=c(0,0,1,0)
+)
+
+
+
+```
+
+### Numerical Summaries
+
++ Frequency distribution, calculate relevant proportions, and contingency 
+  tables for categoricalvariable marketCapIndicator (Low/Medium/High) & industry.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE,comment=NA}
+visualization_data <- dataforanalysis
+visualization_data$Market.Cap <-as.numeric(visualization_data$Market.Cap)
+visualization_data[is.na(visualization_data$Market.Cap)] <- 0
+visualization_data$MarketCapIndiactor <- ifelse(visualization_data$Market.Cap <= 15704965521 ,"low",
+       ifelse(visualization_data$Market.Cap<= 18474965521 , "medium",
+              "high"))
+industryTable <- table(visualization_data$Industry) # A will be rows, B will be columns
+cat("Frequency Table for Industry:")
+print(industryTable)
+marketCapIndiactorTable <- table(visualization_data$MarketCapIndiactor) # A will be rows, B will be columns
+cat("Frequency Table for MarketCapIndiactor:")
+print(marketCapIndiactorTable)
+contingencyTable <- table(visualization_data$Industry, visualization_data$MarketCapIndiactor)
+cat("Contingency Table for Industry/ MarketCapIndiactor:")
+print(contingencyTable)
+proptable <- prop.table(contingencyTable)
+cat("Proportions Table for Industry/ MarketCapIndiactor:")
+print( proptable)
+cat("Summary MarketCapIndiactor")
+summary(visualization_data$MarketCapIndiactor)
+cat("Summary Industry")
+summary(visualization_data$Industry)
+cat("Numerical Summary of Market Cap")
+summary(visualization_data$Market.Cap)
+
+cat("Numerical Summary of Market Cap grouped by Industry")
+
+library(dplyr)
+
+ total_property <-  visualization_data %>%
+   group_by(Industry) %>%
+   dplyr::summarise_at(vars(Market.Cap),funs(sum, mean,min,max,median))
+print(total_property)
+```
+
+
++ Does skewness deviate a lot from 1 ?
+     - Skewness for Industry is left skewed.It has longer tail on the left side of distribution.
+     - Skewness for MarketCapIndiactor is right skewed.It has longer tail on the right side of distribution.
+     - Skewness for Market.Cap is right skewed.It has longer tail on the right side of distribution.
+     - Skewness for Total.Revenue is right skewed.It has longer tail on the right side of distribution.
+     - Skewness for Gross.Profit is right skewed.It has longer tail on the right side of distribution.
+
+```{r, message = FALSE, echo=FALSE,comment=NA}
+
+sp <- skewness(as.numeric(as.factor(visualization_data$Industry)))
+sprintf("skewness  of Industry %f", sp)
+smn <-skewness(as.numeric(as.factor(visualization_data$MarketCapIndiactor)))
+sprintf("skewness  of MarketCapIndiactor %f", smn)
+
+sp3 <- skewness(visualization_data$Market.Cap) 
+sprintf("skewness  of Market.Cap %f", sp3)
+
+sp4 <-skewness(visualization_data$Total.Revenue) 
+sprintf("skewness  of Total.Revenue %f", sp4)
+
+
+sp6 <-skewness(visualization_data$Gross.Profit) 
+sprintf("skewness  of Gross.Profit %f", sp6)
+
+```
+
++ Shapiro Wilkes Test for Normality.
+     -  Industry -> p-value < 8.458e-09 < 0.05 = not normaly distributed 
+```{r, message = FALSE, echo=FALSE}
+s <- sample_n(visualization_data, 640)
+cat("Shapiro Wilkes Test")
+shapiro.test(as.numeric(as.factor(s$Industry))[0:200]) # p-value < 2.2e-16 < 0.05 = not normaly distributed
+```
+
+###Graphical Summaries
+
++ Graphical Summary of categorical variable Industry & marketCapIndiactor
+ 
+```{r, message = FALSE, echo=FALSE,comment=NA}
+
+library(ggplot2)
+p <- ggplot(data.frame(visualization_data$Industry), aes(x=visualization_data$Industry)) +
+  ggtitle("Frequency distribution by Industry") +
+  xlab("Industry") +
+  geom_bar(colour="#DD8888", fill="#DD8888", width=.8)+
+theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+      axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+      plot.title = element_text(size=8,colour="#DD8888"))
+p
+
+library(ggplot2)
+p <- ggplot(data.frame(visualization_data$MarketCapIndiactor), aes(x=visualization_data$MarketCapIndiactor)) +
+  ggtitle("Frequency distribution by MarketCapIndicator") +
+  xlab("Industry") +
+  geom_bar(colour="#DD8888", fill="#DD8888", width=.8)+
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=8,colour="#DD8888"))
+p
+```
+ 
++ Graphical Summary of categorical variable Industry grouped by MarketCapIndiactor
+ 
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+ 
+ library(ggplot2)
+ggplot(visualization_data, aes(x=Industry, fill=MarketCapIndiactor)) +
+  geom_bar(position=position_dodge(), width=.8)+
+theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+      axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+      plot.title = element_text(size=8,colour="#DD8888"))
+```
+
++ Graphical summary of numerical variable Market.Cap,Total.Revenue,Total.Equity,Gross.Profit
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+
+p1<-ggplot(visualization_data, aes(x = Market.Cap)) +
+  geom_histogram(stat = "density",colour="#DD8888") +
+  ggtitle("Market Cap Skewness")+
+theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+      axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+      axis.title.y = element_text(color = "#DD8888", size = 8),
+      axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+      plot.title = element_text(size=12,colour="#DD8888"))
+
+p2<-ggplot(visualization_data, aes(x = Total.Revenue)) +
+  geom_histogram(stat = "density",colour="#DD8888") +
+  ggtitle("Total Revenue Skewness")+
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        axis.title.y = element_text(color = "#DD8888", size = 8),
+        axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=12,colour="#DD8888"))
+
+
+p3<-ggplot(visualization_data, aes(x = Total.Equity)) +
+  geom_histogram(stat = "density",colour="#DD8888") +
+  ggtitle("Total Equity Skewness")+
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        axis.title.y = element_text(color = "#DD8888", size = 8),
+        axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=12,colour="#DD8888"))
+
+p4<-ggplot(visualization_data, aes(x = Gross.Profit)) +
+  geom_histogram(stat = "density",colour="#DD8888") +
+  ggtitle("Gross Profit  Skewness")+
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        axis.title.y = element_text(color = "#DD8888", size = 8),
+        axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=12,colour="#DD8888"))
+
+grid.arrange(p1,p2,p3,p4, ncol=2)
+```
+
++ Graphical summary of numerical variable Market.Cap,Total.Revenue,Total.Equity,Gross.Profit grouped 
+  by categorical variable Industry
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+
+visualization_data %>%
+  group_by(Industry) %>%
+  ggplot(aes(x=Industry, y=Gross.Profit,fill = Industry)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="Industry and Gross Profit",x="Industry", y = "Gross Profit") +
+  geom_boxplot()
+
+visualization_data %>%
+  group_by(Industry) %>%
+  ggplot(aes(x=Industry, y=Total.Equity,fill = Industry)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="Industry and Total Equity",x="Industry", y = "Total Equity") +
+  geom_boxplot()
+
+ visualization_data %>%
+  group_by(Industry) %>%
+  ggplot(aes(x=Industry, y=Total.Revenue,fill = Industry)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="Industry and Total Revenue",x="Industry", y = "Total Revenue") +
+  geom_boxplot()
+
+visualization_data %>%
+  group_by(Industry) %>%
+  ggplot(aes(x=Industry, y=Market.Cap,fill = Industry)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title="Industry and Market Cap",x="Industry", y = "Market Cap") +
+  geom_boxplot()
+```  
+
+### Correlation and Regression### 
+
++ Scatter Plot for Market.Cap & Total.Equity.
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+
+library(scatterplot3d)
+
+str(visualization_data)
+
+my_graph <- ggplot(visualization_data,
+                   aes(x = log(Market.Cap), y = log(Total.Equity))) +
+  geom_point(aes(color = factor(MarketCapIndiactor))) +
+  stat_smooth(method = "lm",
+              col = "#C42126",
+              se = FALSE,
+              size = 1)+
+     ggtitle("Scatter diagram Market Cap & Total Equity")+
+  xlab("Log(Market Cap)") +
+  ylab("Log(Total Equity)") +
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        axis.title.y = element_text(color = "#DD8888", size = 8),
+        axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=12,colour="#DD8888"))
+my_graph
+```
+
++ R2 value for Market.Cap and Total.Equity 
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+r <- summary(lm(Market.Cap ~ log(Total.Equity), data=visualization_data))$r.squared 
+```
+
++ Scatter Plot for Market.Cap & Total.Revenue
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+# 
+my_graph <- ggplot(visualization_data,
+                   aes(x = log(Market.Cap), y = log(Total.Revenue))) +
+  geom_point(aes(color = factor(MarketCapIndiactor))) +
+  stat_smooth(method = "lm",
+              col = "#C42126",
+              se = FALSE,
+              size = 1)+
+  ggtitle("Scatter diagram Market Cap & Total Revenue")+
+  xlab("Log(Market Cap)") +
+  ylab("Log(Total Revenue)") +
+  theme(axis.text.x = element_text(color = "#DD8888", size = 8,angle = 90),
+        axis.title.x = element_text(color = "#DD8888", size = 8,angle = 0),
+        axis.title.y = element_text(color = "#DD8888", size = 8),
+        axis.text.y = element_text(color = "#DD8888", size = 8,angle = 0),
+        plot.title = element_text(size=12,colour="#DD8888"))
+my_graph
+```
+
++ R2 value for Market.Cap and Total.Revenue 
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+r <- summary(lm(Market.Cap ~ log(Total.Revenue), data=visualization_data))$r.squared 
+```
+
++ Statistical Hypothesis Testing can be categorized into two types as below:
+
+   + t-test command prints out the p-value for the data. The p-value can then be readily compared to the significance level. The null hypothesis is then rejected if the p-value is less than the significance level.
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+   
+testvalue <- t.test(visualization_data$Market.Cap,
+                    visualization_data$Total.Revenue)
+print(testvalue)
+sprintf("P value for Market cap & Total revenue %f", testvalue$p.value)
+sprintf("Group Means for Market cap & Total revenue %f", testvalue$estimate)
+sprintf("Confidence interval for difference for Market cap & Total revenue %f", testvalue$conf.int)
+sprintf("Confidence level for Market cap & Total revenue %f", attr(testvalue$conf.int, "conf.level") )
+```
+
+### Inferential Statistics
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+library("quantmod")
+startDate<-as.Date('2000-01-01')
+endDate<-as.Date('2020-11-01')
+getSymbols("GOOGL",src="yahoo",from=startDate,to=endDate)
+#Retrieve the data we need
+
+Price<-Cl(GOOGL)-Op(GOOGL)
+#For this example we will be looking to predict the numeric change in price
+
+DataSetGoogle<-data.frame(Price)
+colnames(DataSetGoogle)<-c("Price")
+
+DataSetGoogle <- cbind(Date=year(as.Date(rownames(DataSetGoogle))),DataSetGoogle)
+
+data1 <- subset(DataSetGoogle, Date >= 2012 & Date < 2014) #Remove Outliers
+data2 <- subset(DataSetGoogle, Date >= 2014 & Date < 2016) #Remove Outliers
+DataSetGoogle<-data.frame(data1$Price[1:502],data2$Price[1:502])
+colnames(DataSetGoogle)<-c("Price2012","Price2014")
+
+```
+
+
+### Hypothesis Test, Mean Change  Price
+
+  + We want to do a  hypothesis about the daily change of price of stock trading. Price may be volatile for stocks which are trending, but it might also be stable over the long-haul.
+
+  + Testing to see if daily price change has changed would make sense if we wanted to evaluate stability over two time frames. For example, if we wanted to do a pre-post analysis after a sales / marketing event, then we would test two samples (one before and one after).
+
+  + Test is two-tailed, meaning we want to know if price increased or decreased. 
+
+  + Once again, we have a very small p-value (near zero), meaning we need to reject the null hypothesis. Mean daily price change is not equal to the baseline price change.Obviously, changing the alpha level makes no difference, because p is so close to zero.
+  
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+myt=t.test(DataSetGoogle$Price2012,mu=DataSetGoogle$Price2012[1],alternative="two.sided", alpha=.05)
+myt
+
+```
+### Paired Tests
+
+  + To conduct a matched t-test, we simply need to compare prices of google between 2012 & 2014.
+  + From the results of the F test, we can see that the null hypothesis that the variances are equal is rejected, because the p-value is below .05. This means we should use the unequal variance t-test (also known as the Welch.)
+
+  + The results of this test are also clear. Reject the null hypothesis that that years 2012 adjusted closing prices are less than or equal to years 2014. That is nice to know. We would definitely want to investigate further, but we would surmise that if a company invested five years ago in a long-term position, they would not  have greater gains!
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+var.test(DataSetGoogle$Price2012,DataSetGoogle$Price2014)
+t.test(DataSetGoogle$Price2012,DataSetGoogle$Price2014, var.equal=TRUE)
+t.test(DataSetGoogle$Price2012,DataSetGoogle$Price2014, var.equal = FALSE)
+```  
+  
+### Independent Tests
+
+  + The independent-samples test can take one of three forms, depending on the structure of your data and the equality of their variances. The general form of the test is t.test(y1, y2, paired=FALSE).
+  + Here for Independent test, we will conduct price comparison between Amazon & Google.
+  + Test for equality of variances in the data prior to running an independent-samples t-test,can be done by var.test() function:
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+library("quantmod")
+startDate<-as.Date('2000-01-01')
+endDate<-as.Date('2020-11-01')
+getSymbols("GOOGL",src="yahoo",from=startDate,to=endDate)
+#Retrieve the data we need
+
+Price<-Cl(GOOGL)-Op(GOOGL)
+#For this example we will be looking to predict the numeric change in price
+
+DataSetGoogle<-data.frame(Price)
+colnames(DataSetGoogle)<-c("Price")
+
+
+
+getSymbols("AMZN",src="yahoo",from=startDate,to=endDate)
+#Retrieve the data we need
+
+Price<-Cl(AMZN)-Op(AMZN)
+#For this example we will be looking to predict the numeric change in price
+
+DataSetAmazon<-data.frame(Price)
+colnames(DataSetAmazon)<-c("Price")
+
+pairedtestdataset <-data.frame(DataSetGoogle$Price[1:502],DataSetAmazon$Price[1:502])
+colnames(pairedtestdataset)<-c("PriceGoogle","PriceAmazon")
+```
+
+```{r, message = FALSE, echo=FALSE,comment=NA, warning=FALSE}
+t.test(pairedtestdataset$PriceGoogle,pairedtestdataset$PriceAmazon, var.equal=TRUE)
+t.test(pairedtestdataset$PriceGoogle,pairedtestdataset$PriceAmazon, var.equal = FALSE)
+var.test(pairedtestdataset$PriceGoogle,pairedtestdataset$PriceAmazon)
+
+```  
+
+### Regression Diagnostic Plots
+
++ Regression plot for Market.Cap with other features
+
+```{r, message = FALSE, echo=FALSE}
+w1 <- ggplot(correlated_data, aes(y=Market.Cap, x=Cost.of.Revenue)) + geom_point(colour="#DD8888")
+w1<- w1 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Cost.of.Revenue")
+
+w2 <- ggplot(correlated_data, aes(y=Market.Cap, x=Depreciation)) + geom_point(colour="#DD8888")
+w2<- w2 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Depreciation")
+
+w3 <- ggplot(correlated_data, aes(y=Market.Cap, x=Earnings.Before.Interest.and.Tax)) + geom_point(colour="#DD8888")
+w3<- w3 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Earnings.Before.Interest.and.Tax")
+
+w4 <- ggplot(correlated_data, aes(y=Market.Cap, x=Fixed.Assets)) + geom_point(colour="#DD8888")
+w4<- w4 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Fixed.Assets")
+
+w5 <- ggplot(correlated_data, aes(y=Market.Cap, x=Gross.Profit)) + geom_point(colour="#DD8888")
+w5<- w5 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Gross.Profit")
+
+w6 <- ggplot(correlated_data, aes(y=Market.Cap, x=Liabilities)) + geom_point(colour="#DD8888")
+w6<- w6 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Liabilities")
+
+w7 <- ggplot(correlated_data, aes(y=Market.Cap, x=Long.Term.Debt)) + geom_point(colour="#DD8888")
+w7<- w7 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Long.Term.Debt")
+
+w8 <- ggplot(correlated_data, aes(y=Market.Cap, x=Retained.Earnings)) + geom_point(colour="#DD8888")
+w8<- w8 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Retained.Earnings")
+
+
+w10 <- ggplot(correlated_data, aes(y=Market.Cap, x=Total.Revenue)) + geom_point(colour="#DD8888")
+w10<- w10 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Total.Revenue")
+
+w11 <- ggplot(correlated_data, aes(y=Market.Cap, x=Total.Equity)) + geom_point(colour="#DD8888")
+w11<- w11 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Total.Equity")
+
+w12 <- ggplot(correlated_data, aes(y=Market.Cap, x=Earnings.Per.Share)) + geom_point(colour="#DD8888")
+w12<- w12 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Earnings.Per.Share")
+
+w13 <- ggplot(correlated_data, aes(y=Market.Cap, x=Stock.p)) + geom_point(colour="#DD8888")
+w13<- w13 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Stock.p")
+
+w14 <- ggplot(correlated_data, aes(y=Market.Cap, x=Estimated.Shares.Outstanding)) + geom_point(colour="#DD8888")
+w14<- w14 + stat_smooth(method="lm", formula = y~poly(x,2))+ ggtitle("Regression Plot \n Polynomial \n Estimated.Shares.Outstanding")
+
+grid.arrange(w1,w2,ncol=2)
+grid.arrange(w3,w4,ncol=2)
+grid.arrange(w5,w6,ncol=2)
+grid.arrange(w7,w8,ncol=2)
+grid.arrange(w10,w11,ncol=2)
+grid.arrange(w12,w13,ncol=2)
+```
+
++ The diagnostic plots of availability with price show residuals in four different ways:
+
+- Residuals vs Fitted: This diagnostic plot is an indicator of the Linearity or Non Linearity of the relationship.If there is no perceivable pattern around the central horizontal curve then the relationship is linear.
+ 
+- Normal Q-Q: This diagnostic plot ascertains whether the residuals are normally distributed.If the resiuals are algned to the central diagonal then the residuals follow a straight line.
+ 
+- Scale-Location: This diagnostic is to evaluate the homogeneity of variance of the residuals .If the residuals are spread uniformly around the central line then the residuals are homoscedastic.
+
+- Residuals vs Leverage. Used to identify influential cases, that is extreme values that might influence the regression results when included or excluded from the analysis.  
+
+
+```{r, message = FALSE, echo=FALSE}
+reg_model2 <- lm(Market.Cap~Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p, data = correlated_data)
+plot(reg_model2,col="#DD8888")
+reg_model2.diagnostics <- augment(reg_model2)
+```
+
+### MultiCollinearity
+
++ Collinearity implies two variables are near perfect linear combinations of one another. Multicollinearity involves more than two variables. In the presence of multicollinearity, regression estimates are unstable and have high standard errors.
++ Variance inflation factors measure the inflation in the variances of the parameter estimates due to collinearities that exist among the predictors. 
++ The general rule of thumb is that VIFs exceeding 4 warrant further investigation, while VIFs exceeding 10 are signs of serious multicollinearity requiring correction.
++ In our example, the VIF score all the Total.Equity,Total.Revenue
+,    Estimated.Shares.Outstanding Earnings.Before.Interest.and.Tax 
+,Gross.Profit is very high . This might be problematic.
+
+```{r, message = FALSE, echo=FALSE}
+
+#--------------------------------------#
+######      Multicollinearity     ######
+#--------------------------------------#
+library(car)  
+m <- correlated_dataforanalysis
+mc <- cor(correlated_dataforanalysis)
+# Checking Variables that are highly correlated
+highlyCorrelated = findCorrelation(mc, cutoff=0.07)
+highlyCorCol = colnames(m)[highlyCorrelated]
+
+fit1 <- lm(Market.Cap~Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p, data = m); #summary(fit1)
+print("VIF score for all features")
+vif(fit1)
+#alias(fit1)
+```
+
+##   Regression- Find if Market.Cap is affected by trading technical indicators
+
+### Linear Regression
+
++ Objective: Check if Market.Cap is affected by "Total.Equity","Total.Revenue",
+"Estimated.Shares.Outstanding","Earnings.Before.Interest.and.Tax","Gross.Profit","Stock.p".
++ Import the dataset, and clean the dataset for target and feature variables.
+ +  Data slicing:
+      -  Dataset is split into 75 percent of training data, 25 % of test set.
+  +  Preprocessing:
+      - We scale and center the predictor & feature variables before passing to models.
+  +  Training the Multiple Linear Regression:      
+     - Training the Multiple Linear Regression with metric as "RMSE".
+     - train() method is passed with repeated cross-validation resampling method for 10 number of resampling iterations repeated for 3 times.The default method for optimizing tuning parameters in train is to use a grid search.Hyperparameter Tuning using Grid Search Cross Validation
+  + Trained classifier results
+     - We can check the result of our train() method by a print fit.LR variable.
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+linearregdataset<-correlated_data
+set.seed(400)
+trainIndex1 <- createDataPartition(linearregdataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+subTrain1 <- linearregdataset[trainIndex1,]
+subTest1 <- linearregdataset[-trainIndex1,]
+
+# setup cross validation and control parameters
+control <- trainControl(method="repeatedcv", number=3, repeats = 3, verbose = TRUE, search = "grid")
+metric <- "RMSE"
+tuneLength <- 10
+
+# Training process 
+# Fit / train a Linear Regression model to  dataset
+
+
+
+linearModelReg <- caret::train(Market.Cap~
+                                 Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p
+                               ,data=subTrain1, method="lm", metric=metric, 
+                               preProc=c("center", "scale"), trControl=control, tuneLength = tuneLength)
+
+linearplotmodel<-lm( Market.Cap~
+                       Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p
+                     ,data = subTrain1)
+
+
+summary(linearModelReg)
+```
+
+ + Prediction
+     - We are ready to predict classes for our test set using predict() method, and calculate error rate and rmse.We get Multiple R-squared value as 0.99499149, and error rate as 0.2309932. 
+
+```{r, message = FALSE, echo=FALSE}
+
+predictions<-predict(linearModelReg,newdata = subTest1)
+
+rmse<-RMSE( predictions, subTest1$Market.Cap)
+error.rate.linear=rmse/mean(subTest1$Market.Cap)
+linearr2= R2( predictions, subTest1$Market.Cap) 
+
+lineardf <- data.frame( Algorithm="LinearRegression",RMSE = rmse, R2 = linearr2 , Error =error.rate.linear) 
+
+cat( "RMSE: ", rmse, "Error: ", error.rate.linear,"R2: ", linearr2)
+
+```
+
+  + Interpretation of results
+
+     - R-squared has the useful property that its scale is intuitive: it ranges from zero to one, with zero indicating that the proposed model does not improve prediction over the mean model, and one indicating perfect prediction. Improvement in the regression model results in proportional increases in R-squared.
+
+     - The RMSE is the square root of the variance of the residuals. It indicates the absolute fit of the model to the data–how close the observed data points are to the model’s predicted values. Whereas R-squared is a relative measure of fit, RMSE is an absolute measure of fit. Lower values of RMSE indicate better fit.
+     
+     - Since error percentage is 23, R2=0.99, RMSE is , it is safe to assume that market cap is  affected by "Total.Equity","Total.Revenue",
+"Estimated.Shares.Outstanding","Earnings.Before.Interest.and.Tax","Gross.Profit","Stock.p".
+
+### Polynominal Regression
+
++ Polynomial regression is a special case of linear regression where we fit a polynomial equation on the data with a curvilinear relationship between the target variable and the independent variables.
+
++ In a curvilinear relationship, the value of the target variable changes in a non-uniform manner with respect to the predictor (s).
+
++ poly function returns or evaluates orthogonal polynomials of degree 1 to degree over the specified set of points x: these are all orthogonal to the constant polynomial of degree 0. 
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+set.seed(400)
+
+polyregdataset<-correlated_data
+polyregdatasettrainIndex <- createDataPartition(polyregdataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+polyregdatasetsubTrain <- polyregdataset[polyregdatasettrainIndex,]
+polyregdatasetsubTest <- polyregdataset[-polyregdatasettrainIndex,]
+
+# setup cross validation and control parameters
+control <- trainControl(method="repeatedcv", number=3, repeats = 3, verbose = TRUE, search = "grid")
+metric <- "RMSE"
+tuneLength <- 10
+
+
+poly_reg <- caret::train(Market.Cap~
+                           poly( Total.Equity,2)+ poly( Total.Revenue,2)+
+                           poly( Estimated.Shares.Outstanding,2)+ poly( Earnings.Before.Interest.and.Tax,2)+
+                           poly( Gross.Profit,2)
+                         +poly( Stock.p,2)
+                         ,data=polyregdatasetsubTrain, method="lm", metric=metric, 
+                         preProc=c("center", "scale"), trControl=control, tuneLength = tuneLength)
+summary(poly_reg)
+
+```
+
++ Polynomial Regression Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+predictionpoly<-predict(poly_reg,newdata = polyregdatasetsubTest)
+
+
+rmsepoly<-RMSE( predictionpoly, polyregdatasetsubTest$Market.Cap)
+
+error.rate.poly=rmse/mean(polyregdatasetsubTest$Market.Cap)
+
+polyrsquare = R2( predictionpoly, polyregdatasetsubTest$Market.Cap) 
+
+polydf <- data.frame( Algorithm="PolynomialRegression",R2 = polyrsquare , Error =error.rate.poly,
+                      RMSE = rmsepoly) 
+
+cat( "RMSE: ", rmsepoly, "Error: ", error.rate.poly,"R2: ", polyrsquare)
+
+```
+
+### Spline Regression
+
++ Spline is a special function defined piece-wise by polynomials. The term “spline” is used to refer to a wide class of functions that are used in applications requiring data interpolation and/or smoothing. The data may be either one-dimensional or multi-dimensional.
++ Spline Regression is one of the non-parametric regression technique. In this technique the dataset is divided into bins at intervals or points which we called as knots. Also this bin has its separate fit. 
++ The disadvantages of the polynomial regression can be overcome by using Spline Regression. Polynomial regression only captures a certain amount of curvature in a nonlinear relationship. An alternative, and often superior, approach to modeling nonlinear relationships is to use splines.
++ Splines provide a way to smoothly interpolate between fixed points, called knots. Polynomial regression is computed between knots. In other words, splines are series of polynomial segments strung together, joining at knots.
++ The generic function quantile produces sample quantiles corresponding to the given probabilities.
++ bs {splines} Generate the B-spline basis matrix for a polynomial spline.bs uses knots	which is
+the internal breakpoints that define the spline.Typical values are the mean or median for one knot, quantiles for more knots.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+set.seed(400)
+splineDataset<-correlated_data
+splineDatasetTrainIndex <- createDataPartition(splineDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+splineDatasetSubTrain <- splineDataset[splineDatasetTrainIndex,]
+splineDatasetSubTest <- splineDataset[-splineDatasetTrainIndex,]
+
+knots <- quantile(splineDatasetSubTrain$Market.Cap, p = c( 0.25,0.50,0.75,1))
+str(splineDataset)
+
+splineModel<-lm( Market.Cap~
+                              bs(Total.Equity, knots = knots) 
+                            + bs( Total.Revenue, knots = knots)
+                            + bs( Estimated.Shares.Outstanding, knots = knots)
+                            + bs( Earnings.Before.Interest.and.Tax, knots = knots)
+                            +bs( Gross.Profit, knots = knots), data = splineDatasetSubTrain)
+summary(splineModel)
+```
+
++ Spline Regression Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+predictionSpline<-predict(splineModel,newdata = splineDatasetSubTest)
+
+rmseSpline<-RMSE( predictionSpline, splineDatasetSubTest$Market.Cap)
+
+error.rate.spline=rmseSpline/mean(splineDatasetSubTest$Market.Cap)
+
+splinerSquare = R2( predictionSpline, splineDatasetSubTest$Market.Cap) 
+# Model performance 
+
+splinedf <- data.frame( Algorithm="Spline Regression",RMSE = rmseSpline, R2 = splinerSquare , Error =error.rate.spline) 
+
+cat( "RMSE: ", rmseSpline, "Error: ", error.rate.spline,"R2: ", splinerSquare)
+
+```
+
+### Generalized Linear Model
+
+ Why Use GAM?Relationships between the individual predictors and the dependent variable follow smooth patterns that can be linear or nonlinear.
++ Mathematically speaking, GAM is an additive modeling technique where the impact of the predictive variables is captured through smooth functions which—depending on the underlying patterns in the data—can be nonlinear.
++ GAM can capture common nonlinear patterns that a classic linear model would miss.
++ GAM framework allows us to control smoothness of the predictor functions to prevent overfitting. By controlling the wiggliness of the predictor functions, we can directly tackle the bias/variance tradeoff.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+set.seed(200)
+gamDataset<-correlated_data
+gamDatasetDatasetTrainIndex <- createDataPartition(gamDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+gamDatasetDatasetSubTrain <- gamDataset[gamDatasetDatasetTrainIndex,]
+gamDatasetDatasetSubTest <- gamDataset[-gamDatasetDatasetTrainIndex,]
+
+
+gamModel <- gam(Market.Cap ~ Total.Equity+Total.Revenue+Earnings.Before.Interest.and.Tax+Estimated.Shares.Outstanding+Gross.Profit, data=gamDatasetDatasetSubTrain)
+gamFit <- gam(Market.Cap ~ Total.Equity+Earnings.Before.Interest.and.Tax, data=gamDatasetDatasetSubTrain)
+
+summary(gamFit)
+```
+
++ GAM Regression Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+predictiongam<-predict(gamFit,newdata = gamDatasetDatasetSubTest)
+
+rmsegam<-RMSE( predictiongam, gamDatasetDatasetSubTest$Market.Cap)
+
+error.rate.gam=rmsegam/mean(gamDatasetDatasetSubTest$Market.Cap)
+
+rsquaregam = R2( predictiongam, gamDatasetDatasetSubTest$Market.Cap) 
+
+gamdf <- data.frame( Algorithm="GAM" , RMSE = rmsegam, R2 = rsquaregam , Error =error.rate.gam) 
+
+cat( "RMSE: ", rmsegam, "Error: ", error.rate.gam,"R2: ", rsquaregam)
+
+```
++ GAM Scatter Plot 3D Visualization 
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+s3d <- scatterplot3d(correlated_data$Market.Cap,
+                     correlated_data$Total.Equity,
+                     correlated_data$Earnings.Before.Interest.and.Tax, 
+                     pch=16, highlight.3d = TRUE, type = "h", 
+                     main = "Multi-Variable Regression 
+                     \nMarket.Cap ~ Total.Equity + Earnings.Before.Interest.and.Tax", 
+                     xlab="Market.Cap", 
+                     zlab="Earnings.Before.Interest.and.Tax", 
+                     ylab="Total.Equity", 
+                     angle=35)
+s3d$plane3d(gamFit)
+
+```
+
++ Visualization part of gam model
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+#Plotting the Model
+par(mfrow=c(1,1)) #to partition the Plotting Window
+plot(gamFit, all.terms = TRUE) 
+#se stands for standard error Bands
+```
+
++ Diagnosing GAM model issues 
+
+```{r, message = FALSE, echo=FALSE}
+gam.check(gamFit, k.rep=1000)
+```
+
+
+### Penalized Cubic Regression Spline
+
++ Cubic Regression Spline is specified by bs="cr". These have a cubic spline basis defined by a modest sized set of knots spread evenly through the covariate values. They are penalized by the conventional intergrated square second derivative cubic spline penalty.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+set.seed(200)
+cubicRegressionSplineDataset<-correlated_data
+cubicRegressionSplineDatasetTrainIndex <- createDataPartition(cubicRegressionSplineDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+cubicRegressionDatasetSubTrain <- cubicRegressionSplineDataset[cubicRegressionSplineDatasetTrainIndex,]
+cubicRegressionDatasetSubTest <- cubicRegressionSplineDataset[-cubicRegressionSplineDatasetTrainIndex,]
+
+
+cubicModel <- gam(Market.Cap ~ s(Total.Equity, bs="cr")+s(Total.Revenue, bs="cr")+
+                 s(Earnings.Before.Interest.and.Tax, bs="cr"),
+               data=cubicRegressionSplineDataset)
+
+summary(cubicModel)
+```
++ Diagnosing Penalized Cubic Regression Spline GAM model issues 
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+gam.check(cubicModel, k.rep=1000)
+
+vis.gam(cubicModel, type='response', plot.type='persp',
+        phi=30, theta=30, n.grid=500, border=NA)
+visreg2d(cubicModel, xvar='Total.Equity', yvar='Market.Cap', scale='response')
+```
+
++ Cubic Regression Spline Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+predictiongamsmooth<-predict(cubicModel,newdata = cubicRegressionDatasetSubTest)
+
+rmsegamsmooth<-RMSE( predictiongamsmooth, cubicRegressionDatasetSubTest$Market.Cap)
+
+error.rate.gam.smooth=rmsegamsmooth/mean(cubicRegressionDatasetSubTest$Market.Cap)
+
+rsquaregamsmooth = R2( predictiongamsmooth, cubicRegressionDatasetSubTest$Market.Cap) 
+
+cubicRegressionSplineDf <- data.frame( Algorithm="Cubic Regression Spline",RMSE = rmsegamsmooth, R2 = rsquaregamsmooth , Error =error.rate.gam.smooth) 
+
+cat( "RMSE: ", rmsegamsmooth, "Error: ", error.rate.gam.smooth,"R2: ", rsquaregamsmooth)
+
+
+```
+    
+### Extreme Gradient Boosting
+
++ XGBoost is an implementation of the Gradient Boosted Decision Trees algorithm. 
++ XGBoost supports various objective functions, including regression, classification and ranking. 
++ XGBoost gives among the best performances in many machine learning applications. It is optimized gradient-boosting machine learning library. The core algorithm is parallelizable and hence it can use all the processing power of your machine and the machines in your cluster. In R, according to the package documentation, since the package can automatically do parallel computation on a single machine, it could be more than 10 times faster than existing gradient boosting packages.
++ XGBoost shines when we have lots of training data where the features are numeric or mixture of numeric and categorical fields. It is also important to note that xgboost is not the best algorithm out there when all the features are categorical or when the number of rows is less than the number of fields (columns).
+
++ The data argument in the xgboost R function is for the input features dataset. It accepts a matrix, dgCMatrix, or local data file. The nrounds argument refers to the max number of iterations (i.e. the number of trees added to the model). 
+
++ There are different hyperparameters that we can tune and the parametres are different from baselearner to baselearner. In tree based learners, which are the most common ones in xgboost applications, the following are the most commonly tuned hyperparameters:
+
++ learning rate: learning rate/eta- governs how quickly the model fits the residual error using additional base learners. If it is a smaller learning rate, it will need more boosting rounds, hence more time, to achieve the same reduction in residual error as one with larger learning rate. Typically, it lies between 0.01 - 0.3
+
++ The three hyperparameters below are regularization hyperparameters.
+
++ gamma: min loss reduction to create new tree split. default = 0 means no regularization.
+
++ lambda: L2 reg on leaf weights. Equivalent to Ridge regression.
+
++ alpha: L1 reg on leaf weights. Equivalent to Lasso regression.
+
++ max_depth: max depth per tree. This controls how deep our tree can grow. The Larger the depth, more complex the model will be and higher chances of overfitting. Larger data sets require deep trees to learn the rules from data. Default = 6.
+
++ subsample: % samples used per tree. This is the fraction of the total training set that can be used in any boosting round. Low value may lead to underfitting issues. A very high value can cause over-fitting problems.
+
++ colsample_bytree: % features used per tree. This is the fraction of the number of columns that we can use in any boosting round. A smaller value is an additional regularization and a larger value may be cause overfitting issues.
+
++ n_estimators: number of estimators (base learners). This is the number of boosting rounds.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+set.seed(200)
+extremeGradinetBoostingDataset<-correlated_data
+extremeGradinetBoostingDatasetTrainIndex <- createDataPartition(extremeGradinetBoostingDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+extremeGradinetBoostingDatasetSubTrain <- extremeGradinetBoostingDataset[extremeGradinetBoostingDatasetTrainIndex,]
+extremeGradinetBoostingDatasetSubTest <- extremeGradinetBoostingDataset[-extremeGradinetBoostingDatasetTrainIndex,]
+
+
+xgbGrid <- expand.grid(nrounds = c(140,160),  # this is n_estimators in the python code above
+                       max_depth = c(10, 15, 20, 25),
+                       colsample_bytree = seq(0.5, 0.9, length.out = 5),
+                       ## The values below are default values in the sklearn-api. 
+                       eta = 0.3,
+                       gamma=0,
+                       min_child_weight = 1,
+                       subsample = 1
+)
+
+model_xgb <- train(Market.Cap ~ Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p,
+                   data = extremeGradinetBoostingDatasetSubTrain,
+                   method = "xgbTree",
+                   preProcess = c("scale", "center"),
+                   trControl = trainControl(method = "repeatedcv", 
+                                            number = 5, 
+                                            repeats = 3, 
+                                            verboseIter = FALSE),
+                   tuneGrid = xgbGrid,
+                   verbose = 0)
+
+plot(model_xgb)
+
+```
+
++ Extreme Gradient Boosting  Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+pred_xgb = predict(model_xgb, extremeGradinetBoostingDatasetSubTest)
+
+#changed from 30
+mse = mean((extremeGradinetBoostingDatasetSubTest[, 4] - pred_xgb)^2)
+mae = caret::MAE(extremeGradinetBoostingDatasetSubTest[, 4], pred_xgb)
+rmse = caret::RMSE(extremeGradinetBoostingDatasetSubTest[, 4], pred_xgb)
+
+cat("MSE: ", mse, "MAE: ", mae, " RMSE: ", rmse)
+
+x = 1:length(extremeGradinetBoostingDatasetSubTest[, 1])
+plot(x, extremeGradinetBoostingDatasetSubTest[, 1], col = "red", type = "l",lty=3, lwd=3, xlab='x', ylab='y')
+lines(x, pred_xgb, col = "blue", type = "l")
+legend(x = 1, y = 5000,  legend = c("original test_y", "predicted test_y"), 
+       col = c("red", "blue"), box.lty = 1, cex = 0.8, lty = c(1, 1))
+
+
+rmseXgb<-RMSE( pred_xgb, extremeGradinetBoostingDatasetSubTest$Market.Cap)
+rmseXgb
+
+error.rate.Xgb=rmseXgb/mean(extremeGradinetBoostingDatasetSubTest$Market.Cap)
+error.rate.Xgb
+
+rsquarexgb = R2( pred_xgb, extremeGradinetBoostingDatasetSubTest$Market.Cap) 
+rsquarexgb
+
+extremeGradinetBoostingdf <- data.frame( Algorithm="ExtremeGradinetBoosting",RMSE = rmseXgb, R2 = rsquarexgb , Error =error.rate.Xgb) 
+
+cat( "RMSE: ", rmseXgb, "Error: ", error.rate.Xgb,"R2: ", rsquarexgb)
+
+```
+### Compare Regression Models
+
+```{r, message = FALSE, echo=FALSE}
+
+compares<-data.frame("Algorithm","RMSE","R2","Error")
+compares[nrow(compares) + 1,] = extremeGradinetBoostingdf
+compares[nrow(compares) + 1,] = cubicRegressionSplineDf
+compares[nrow(compares) + 1,] = gamdf
+compares[nrow(compares) + 1,] = splinedf
+compares[nrow(compares) + 1,] = polydf
+compares[nrow(compares) + 1,] = lineardf
+
+```
+
+```{r results='asis',render=normal_print, message = FALSE, echo=FALSE}
+kable(head(compares))
+```
+
+### Conclusion
+ As such, we provide evidence suggesting that stock technical indicator has influence  in stock market market cap. PolynomialRegression outperforms other model with lesser error and  with R2=0.994 the model completely fit.
+ 
+
+## Generalized Linear Model
+
+ Why Use GAM?Relationships between the individual predictors and the dependent variable follow smooth patterns that can be linear or nonlinear.
++ Mathematically speaking, GAM is an additive modeling technique where the impact of the predictive variables is captured through smooth functions which—depending on the underlying patterns in the data—can be nonlinear.
++ GAM can capture common nonlinear patterns that a classic linear model would miss.
++ GAM framework allows us to control smoothness of the predictor functions to prevent overfitting. By controlling the wiggliness of the predictor functions, we can directly tackle the bias/variance tradeoff.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+set.seed(200)
+gamDataset<-correlated_data
+gamDatasetDatasetTrainIndex <- createDataPartition(gamDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+gamDatasetDatasetSubTrain <- gamDataset[gamDatasetDatasetTrainIndex,]
+gamDatasetDatasetSubTest <- gamDataset[-gamDatasetDatasetTrainIndex,]
+
+
+gamModel <- gam(Market.Cap ~ Total.Equity+Total.Revenue+Earnings.Before.Interest.and.Tax+Estimated.Shares.Outstanding+Gross.Profit, data=gamDatasetDatasetSubTrain)
+gamFit <- gam(Market.Cap ~ Total.Equity+Earnings.Before.Interest.and.Tax, data=gamDatasetDatasetSubTrain)
+
+summary(gamFit)
+```
+
+### GAM Regression Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+predictiongam<-predict(gamFit,newdata = gamDatasetDatasetSubTest)
+
+rmsegam<-RMSE( predictiongam, gamDatasetDatasetSubTest$Market.Cap)
+
+error.rate.gam=rmsegam/mean(gamDatasetDatasetSubTest$Market.Cap)
+
+rsquaregam = R2( predictiongam, gamDatasetDatasetSubTest$Market.Cap) 
+
+gamdf <- data.frame( Algorithm="GAM" , RMSE = rmsegam, R2 = rsquaregam , Error =error.rate.gam) 
+
+cat( "RMSE: ", rmsegam, "Error: ", error.rate.gam,"R2: ", rsquaregam)
+
+```
+### GAM Scatter Plot 3D Visualization 
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+s3d <- scatterplot3d(correlated_data$Market.Cap,
+                     correlated_data$Total.Equity,
+                     correlated_data$Earnings.Before.Interest.and.Tax, 
+                     pch=16, highlight.3d = TRUE, type = "h", 
+                     main = "Multi-Variable Regression 
+                     \nMarket.Cap ~ Total.Equity + Earnings.Before.Interest.and.Tax", 
+                     xlab="Market.Cap", 
+                     zlab="Earnings.Before.Interest.and.Tax", 
+                     ylab="Total.Equity", 
+                     angle=35)
+s3d$plane3d(gamFit)
+
+```
+
++ Visualization part of gam model
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+#Plotting the Model
+par(mfrow=c(1,1)) #to partition the Plotting Window
+plot(gamFit, all.terms = TRUE) 
+#se stands for standard error Bands
+```
+
++ Diagnosing GAM model issues 
+
+```{r, message = FALSE, echo=FALSE}
+gam.check(gamFit, k.rep=1000)
+```
+ 
+ 
+## Extreme Gradient Boosting
+
++ XGBoost is an implementation of the Gradient Boosted Decision Trees algorithm. 
++ XGBoost supports various objective functions, including regression, classification and ranking. 
++ XGBoost gives among the best performances in many machine learning applications. It is optimized gradient-boosting machine learning library. The core algorithm is parallelizable and hence it can use all the processing power of your machine and the machines in your cluster. In R, according to the package documentation, since the package can automatically do parallel computation on a single machine, it could be more than 10 times faster than existing gradient boosting packages.
++ XGBoost shines when we have lots of training data where the features are numeric or mixture of numeric and categorical fields. It is also important to note that xgboost is not the best algorithm out there when all the features are categorical or when the number of rows is less than the number of fields (columns).
+
++ The data argument in the xgboost R function is for the input features dataset. It accepts a matrix, dgCMatrix, or local data file. The nrounds argument refers to the max number of iterations (i.e. the number of trees added to the model). 
+
++ There are different hyperparameters that we can tune and the parametres are different from baselearner to baselearner. In tree based learners, which are the most common ones in xgboost applications, the following are the most commonly tuned hyperparameters:
+
++ learning rate: learning rate/eta- governs how quickly the model fits the residual error using additional base learners. If it is a smaller learning rate, it will need more boosting rounds, hence more time, to achieve the same reduction in residual error as one with larger learning rate. Typically, it lies between 0.01 - 0.3
+
++ The three hyperparameters below are regularization hyperparameters.
+
++ gamma: min loss reduction to create new tree split. default = 0 means no regularization.
+
++ lambda: L2 reg on leaf weights. Equivalent to Ridge regression.
+
++ alpha: L1 reg on leaf weights. Equivalent to Lasso regression.
+
++ max_depth: max depth per tree. This controls how deep our tree can grow. The Larger the depth, more complex the model will be and higher chances of overfitting. Larger data sets require deep trees to learn the rules from data. Default = 6.
+
++ subsample: % samples used per tree. This is the fraction of the total training set that can be used in any boosting round. Low value may lead to underfitting issues. A very high value can cause over-fitting problems.
+
++ colsample_bytree: % features used per tree. This is the fraction of the number of columns that we can use in any boosting round. A smaller value is an additional regularization and a larger value may be cause overfitting issues.
+
++ n_estimators: number of estimators (base learners). This is the number of boosting rounds.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+set.seed(200)
+extremeGradinetBoostingDataset<-correlated_data
+extremeGradinetBoostingDatasetTrainIndex <- createDataPartition(extremeGradinetBoostingDataset$Market.Cap, p = 0.8, list=FALSE, times=3)
+extremeGradinetBoostingDatasetSubTrain <- extremeGradinetBoostingDataset[extremeGradinetBoostingDatasetTrainIndex,]
+extremeGradinetBoostingDatasetSubTest <- extremeGradinetBoostingDataset[-extremeGradinetBoostingDatasetTrainIndex,]
+
+
+xgbGrid <- expand.grid(nrounds = c(140,160),  # this is n_estimators in the python code above
+                       max_depth = c(10, 15, 20, 25),
+                       colsample_bytree = seq(0.5, 0.9, length.out = 5),
+                       ## The values below are default values in the sklearn-api. 
+                       eta = 0.3,
+                       gamma=0,
+                       min_child_weight = 1,
+                       subsample = 1
+)
+
+model_xgb <- train(Market.Cap ~ Total.Equity+Total.Revenue+ Estimated.Shares.Outstanding+Earnings.Before.Interest.and.Tax+Gross.Profit+Stock.p,
+                   data = extremeGradinetBoostingDatasetSubTrain,
+                   method = "xgbTree",
+                   preProcess = c("scale", "center"),
+                   trControl = trainControl(method = "repeatedcv", 
+                                            number = 5, 
+                                            repeats = 3, 
+                                            verboseIter = FALSE),
+                   tuneGrid = xgbGrid,
+                   verbose = 0)
+
+plot(model_xgb)
+
+```
+
+### Extreme Gradient Boosting  Prediction & Accuracy
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+pred_xgb = predict(model_xgb, extremeGradinetBoostingDatasetSubTest)
+
+#changed from 30
+mse = mean((extremeGradinetBoostingDatasetSubTest[, 4] - pred_xgb)^2)
+mae = caret::MAE(extremeGradinetBoostingDatasetSubTest[, 4], pred_xgb)
+rmse = caret::RMSE(extremeGradinetBoostingDatasetSubTest[, 4], pred_xgb)
+
+cat("MSE: ", mse, "MAE: ", mae, " RMSE: ", rmse)
+
+x = 1:length(extremeGradinetBoostingDatasetSubTest[, 1])
+plot(x, extremeGradinetBoostingDatasetSubTest[, 1], col = "red", type = "l",lty=3, lwd=3, xlab='x', ylab='y')
+lines(x, pred_xgb, col = "blue", type = "l")
+legend(x = 1, y = 5000,  legend = c("original test_y", "predicted test_y"), 
+       col = c("red", "blue"), box.lty = 1, cex = 0.8, lty = c(1, 1))
+
+
+rmseXgb<-RMSE( pred_xgb, extremeGradinetBoostingDatasetSubTest$Market.Cap)
+rmseXgb
+
+error.rate.Xgb=rmseXgb/mean(extremeGradinetBoostingDatasetSubTest$Market.Cap)
+error.rate.Xgb
+
+rsquarexgb = R2( pred_xgb, extremeGradinetBoostingDatasetSubTest$Market.Cap) 
+rsquarexgb
+
+extremeGradinetBoostingdf <- data.frame( Algorithm="ExtremeGradinetBoosting",RMSE = rmseXgb, R2 = rsquarexgb , Error =error.rate.Xgb) 
+
+cat( "RMSE: ", rmseXgb, "Error: ", error.rate.Xgb,"R2: ", rsquarexgb)
+
+``` 
+ 
+##  Decision Tree to Trade Bank of America Stock (Real Time Value Analysis)
+
++ Decision trees are one of the more popular machine-learning algorithms for their ability to model noisy data, easily pick up non-linear trends, and capture relationships between your indicators; they also have the benefit of being easy to interpret.
++ Decision trees take a top-down, “divide-and-conquer” approach to analyzing data. They look for the indicator, and indicator value, that best splits the data into two distinct groups. 
++ The algorithm then repeats this process on each subsequent group until it correctly classifies every data point or a stopping criteria is reached. 
++ Each split, known as a “node”, tries to maximize the purity of the resulting “branches”. The purity is basically the probability that a data point falls in a given class, in our case “up” or “down”, and is measured by the “information gain” of each split.
++ In this model, we are going to use real time data of bofa stock from 2000- 2020.For this we
+will use quantmod package
+
+###  Building a Strategy
++ Let’s see how we can quickly build a strategy using 4 technical indicators to see whether today’s price of BoA’s stock is going to close up or down.The 4 technical indicators are:
+   - RSI -> Calculate a 3-period relative strength index (RSI) off the open price
+   - EMA -> Calculate a 5-period exponential moving average (EMA)
+   - MACD -> Calculate a MACD with standard parameters
+   - SMI -> Stochastic Oscillator with standard parameters
++ Then we calculate the variable we are looking to predict and build our data sets.
+   - Class -> Calculate the difference between the close price and open price.
+    If PriceChange>0,"UP","DOWN"
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(ggcorrplot)
+library(lattice)
+library(psych)
+library(DataExplorer)
+library(reshape2)
+library(car)
+library(caret)
+library(cowplot)
+library(caTools)
+library(rpart.plot)
+library(e1071)
+library(leaps)
+library(rpart)
+library(randomForest)
+library(scales)
+library(RColorBrewer)
+library(packHV)
+options(warn=-1)
+
+library("quantmod")
+#Allows us to import the data we need and calculate the technical indicators
+library("rpart")
+#Gives us access to the decision trees we will be using. (I had to update my version of R in order to install this one.)
+
+#install.packages("rpart.plot")
+library("rpart.plot")
+#Let’s us easily create good looking diagrams of the trees.
+
+startDate = as.Date("2000-01-01")
+#The beginning of the date range we want to look at
+
+endDate = as.Date("2020-11-01")
+#The end of the date range we want to look at
+
+getSymbols("BAC", src = "yahoo", from = startDate, to = endDate)
+#Retrieving the daily OHLCV of Bank of America’s stock from Yahoo Finance
+
+
+RSI3<-RSI(Op(BAC), n= 3)
+#Calculate a 3-period relative strength index (RSI) off the open price
+
+EMA5<-EMA(Op(BAC),n=5)
+#Calculate a 5-period exponential moving average (EMA)
+EMAcross<- Op(BAC)-EMA5
+#Let’s explore the difference between the open price and our 5-period EMA
+
+
+MACD<-MACD(Op(BAC),fast = 12, slow = 26, signal = 9)
+#Calculate a MACD with standard parameters
+MACDsignal<-MACD[,2]
+#Grab just the signal line to use as our indicator.
+
+
+SMI<-SMI(Op(BAC),n=13,slow=25,fast=2,signal=9)
+#Stochastic Oscillator with standard parameters
+SMI<-SMI[,1]
+#Grab just the oscillator to use as our indicator
+
+PriceChange<- Cl(BAC) - Op(BAC)
+#Calculate the difference between the close price and open price
+Class<-ifelse(PriceChange>0,"UP","DOWN")
+#Create a binary classification variable, the variable we are trying to predict.
+
+dfdecisiontree<-data.frame(RSI3,EMAcross,MACDsignal,SMI,Class)
+#Create our data set
+colnames(dfdecisiontree)<-c("RSI3","EMAcross","MACDsignal","Stochastic","Class")
+colnames(dfdecisiontree)
+```
++ Data slicing is a step to split data into train and test set. Training data set can be used specifically for our model building. Test dataset should not be mixed up while building model. Even during standardization, we should not standardize our test set.75 percent contributes to training &
+25 percent of data contributes to test.
+
++ Training the Decision Tree classifier with criterion as information gain
+
++ We are setting 3 parameters of trainControl() method. The “method” parameter holds the details about resampling method. We can set “method” to use repeatedcv i.e, repeated cross-validation.
+
++ The “number” parameter holds the number of resampling iterations. The “repeats ” parameter contains the complete sets of folds to compute for our repeated cross-validation. We are using setting number =10 and repeats =3. This trainControl() methods returns a list. We are going to pass this on our train() method.
+
++ To select the specific strategy for decision tree, we need to pass a parameter “parms” in our train() method. It should contain a list of parameters for our rpart method. For splitting criterions, we need to add a “split” parameter with values either “information” for information gain & “gini” for gini index.  We are using information gain as a criterion.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+#Name the columns
+dfdecisiontree<-dfdecisiontree[-c(1:33),]
+#Get rid of the data where the indicators are being calculated
+
+
+intrain <- createDataPartition(y = dfdecisiontree$Class, p= 0.75, list = FALSE)
+training <- dfdecisiontree[intrain,]
+testing <- dfdecisiontree[-intrain,]
+
+trainX <- training[,names(training) != "Class"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+ctrl <- trainControl(method="repeatedcv", number = 10,repeats = 3)
+
+set.seed(400)
+dtree_fit <- train( Class~ ., data = training, method = "rpart",
+                    parms = list(split = "information"),
+                    trControl = ctrl,
+                    control = rpart.control(maxdepth = 6),
+                    preProcess = c("center","scale"), 
+                    tuneLength = 10)
+```
+
+### Trained Decision Tree classifier results
+    + We can check the result of our train() method by a print dtree_fit variable. It is showing us the accuracy metrics for different values of cp. Here, cp is complexity parameter for our dtree.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+dtree_fit
+```
+
+### Plot Decision Tree
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+plot(dtree_fit)
+prp(dtree_fit$finalModel, box.palette = "Reds", tweak = 1.2)
+```
+#### Decision Tree Prediction
+
+Now, our model is trained with cp = 0.003645833.Accuracy of the model is 0.5141566.
+
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+dtreePREDICT <- predict(dtree_fit,newdata = testing )
+confusionMatrix(dtreePREDICT, (as.factor(testing$Class))) 
+```
+
+##  KNN Classifier to predict if daily stock price will increase
+
++ kNN algorithm is a non-parametric algorithm that can be used for either classification or regression. Non-parametric means that it makes no assumption about the underlying data or its distribution. 
+
++ For each data point, the algorithm finds the k closest observations, and then classifies the data point to the majority. Usually, the k closest observations are defined as the ones with the smallest Euclidean distance to the data point under consideration.
+
++ K-Nearest Neighbors computes the likelihood of each share closing price based on other technical indicator.
+
+### Building KNN model
+
+ + Data Model which we will use for ML is listed below. Here, the 3 columns represent the closing price,opening price,High price, volume of the stock  on the given date. 
+ + The Increase column represents whether the price of stock rose or fell as compared to the previous day.
+ + We are using caret's KNN to sample the data (for training and testing), preprocessing, evaluating the model etc.,
+
++  ***Step 1: Data Splicing ***
+
+    -   KNN algorithm is applied to the training data set and the results are verified on the test data set.
+    -  I used 25% to test data and 75% to train the data.
+    -  After obtaining training and testing data sets, then we will create a separate data frame from testing data set which has values to be compared with actual final values
+    -  Predictor variables are Open ,increase ,Volume,High. Target variable is Close
+
++  ***Step 2:Data Pre-Processing With Caret ***
+
+    -  We need to pre-process our data before we can use it for modeling.
+    -  The caret package in R provides a number of useful data transforms.
+    -  Training transforms can prepared and applied automatically during model evaluation.
+    -  Transforms applied during training are prepared using the preProcess() and passed to the train() function via the preProcess argument.
+    -  Combining the scale and center transforms for preprocessing will standardize the data.
+    -  The scale transform calculates the standard deviation for an attribute and divides each value by that standard deviation.
+    -  The center transform calculates the mean for an attribute and subtracts it from each value.
+    -  Attributes after preprocessing will have a mean value of 0 and a standard deviation of 1.
+
++  ***Step 3:Model Training and Tuning ***
+
+    -  To control parameters for train, trainControl function is used.
+“trainControl” allows estimation of parameter coefficients through resampling methods like cross validation, repeatedcv,boosting etc.
+    -   The option “repeatedcv” method which we used in traincontrol method controls the number of repetitions for resampling used in repeated K-fold cross-validation.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+library(class)
+library(dplyr)
+library(lubridate)
+library(class)
+library(gmodels)
+library(caret)
+set.seed(100)
+
+bny_raw <- read.csv(file = "/Users/nselvarajan/Desktop/R/finals/datasets1/bankofmelon.csv", header = T,stringsAsFactors = F)
+bny_raw <- data.frame(bny_raw, stringsAsFactors = FALSE)
+bny_raw<-subset(bny_raw,select =c(Date,Open,increase,Volume,Close,High))
+
+bny_raw$Date <- mdy(bny_raw$Date)
+bny_raw$Date <- as.numeric(bny_raw$Date)
+bny_raw$Open <- as.numeric((bny_raw$Open))
+bny_raw$increase <- as.factor((bny_raw$increase))
+bny_raw$Volume <- as.numeric((bny_raw$Volume))
+bny_raw$Close <- as.numeric((bny_raw$Close))
+bny_raw$High <- as.numeric((bny_raw$High))
+as.data.frame(colnames(bny_raw))
+
+```
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+indxTrain <- createDataPartition(y = bny_raw$increase,p = .75,list = FALSE)
+training <- bny_raw[indxTrain,]
+testing <- bny_raw[-indxTrain,]
+trainX <- training[,names(training) != "increase"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+set.seed(400)
+ctrl <- trainControl(method="repeatedcv",repeats = 3)
+knnFit <- train( increase~ ., data = training, method = "knn",
+                 trControl = ctrl, preProcess = c("center","scale"),
+                 tuneLength = 20)
+```
+
++  ***Step 4:How to choose value for K to improve performance ***
+
+    -  Time to fit a knn model using caret with preprocessed values.
+    -   From the output of the knn model ,maximum RSquared(0.9983847) is achieved by k = 5
+    -  Now we can plot our KNN , and view summary of the model
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+knnFit
+plot(knnFit)
+plot(varImp(knnFit), top = 3,color="red")
+```
+
+### KNN Accuracy
+
++  ***Step 5: Making predictions ***
+    -  We build knn by using training & test data sets. After building the model, then we can check the accuracy of forecasting using confusion matrix.
+    
++  ***Step 6: Interpretation of the results and prediction accuracy achieved. ***
+    -  The accuracy of our model on the testing set is 55%.
+    -  We can visualise the model’s performance using a confusion matrix.
+    -  We can also evaluvate the accuracy, precision and recall on the training and validation sets in confusion matrix to evaluate the performance of knn algorithm.
+    
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+knnPredict <- predict(knnFit,newdata = testing)
+confusionMatrix(knnPredict, testing$increase)
+k <- mean(knnPredict == testing$increase)
+cat( "Accuracy: ", k)
+```
+
+### Overall insights obtained from the implemented project
+
++  As we can see, the model has the highest accuracy of 55 when k = 5. While this may not seem any good, it is often extremely hard to predict the price of stocks. Even the 2.5% improvement over random guessing can make a difference given the amount of money at stake. After all, if it was that easy to predict the prices, wouldn’t we all be trading in stocks for the easy money instead of learning these algorithms?
++  Sensitivity for price increase  is 0.3225 .
++  Specificity for price increase  is 0.7337.
+
+## K-means Clustering NYSE trades.
+
++ K-means clustering is an unsupervised learning method used to uncover non-random structures in your data. 
++ It does so by creating labels for your training data, where each label is a cluster. 
++ An ideal cluster analysis groups points together on a scatterplot, with maximized space (seperation) between groups, and minimized space (cohesion) between points in the same group. 
++ Groups can be centered around a non-real point (k-means).
+
++  ***Challenge: Group stock based on performances ***
+ + Perform k-means clustering of the New York Stock Exchange (NYSE) dataset that has more than 9,211,031 NYSE trade data. Columns from 1 to 7 are:
+
+    -   ID INTEGER record ID
+    -   OPEN_P DOUBLE open price
+    -   HIGH_P DOUBLE highest price
+    -   LOW_P DOUBLE lowest price
+    -   CLOSE_P DOUBLE close price
+    -   VOLUME DOUBLE volume
+    -   CLOSE_ADJ_P DOUBLE close adjusted price
+    
++  ***Choose K Value***
+
+    -   Use columns 2 from the input data and perform the k-means clustering with k = 0 to 15. Set the maximum number of iterations to 10,000.
+    
+    -   Use Within Cluster Sum of Squares as a measure to choose best K , which measures the squared average distance of all the points within a cluster to the cluster centroid. To calculate WCSS, you first find the Euclidean distance (see figure below) between a given point and the centroid to which it is assigned. You then iterate this process for all points in the cluster, and then sum the values for the cluster and divide by the number of points. Finally, you calculate the average across all clusters. This will give you the average WCSS.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+library(ggplot2)   #(2)
+library(caret)   #(3)
+library(rpart)  #(4)
+library(rpart.plot)  #(5)
+
+tradingData <- read.csv("/Users/nselvarajan/Desktop/R/finals/datasets1/NYSE_DM.csv", header = TRUE)
+tradingData<-tradingData[1:33333,]
+
+
+#drop ID column
+tradingData <- tradingData[, -c(1,3,4,5,6,7)]
+colnames(tradingData) <- c("OPEN_P","CHANGE")
+
+
+clusters.sum.squares <- rep(0.0, 9)
+cluster.params <- 1:9
+#set.seed(893247)
+for (i in cluster.params) {
+  kmeans.temp <- kmeans(tradingData, centers = i, iter.max = 10000)
+  clusters.sum.squares[i - 1] <- sum(kmeans.temp$withinss)
+}   
+
+
+```
+-   From the below plot we can see K=7 will not overfit/underfit the model.
+    
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+ggplot(NULL, aes(x = cluster.params, y = clusters.sum.squares)) +
+  theme_bw() +
+  geom_point() +
+  geom_line() +
+  labs(x = "Number of Clusters",
+       y = "Cluster Sum of Squared Distances",
+       title = "Trading Training Data Scree Plot")
+```
+
+***Modelling***
+
++ We’ll now use the k-means alogorithm to fit a model. 
++ It will divide all datapoints into 7 clusters, and allocate each point to a cluster group using a distance (euclidean) measurement. 
++ We’ll set it to iteratively determine which point belongs to each cluster 10,000 times, allowing for each iteration to recalculate where the center of the groups is and which points are closest to those centers.
++ We can visualize the coefficients with the following plot.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+kmeanstest.temp <- kmeans(tradingData, centers = 7, iter.max = 10000)
+
+summary(kmeanstest.temp)
+cat( "Centers: ", kmeanstest.temp$centers)
+cat( "No Of Records in Cluster: ", kmeanstest.temp$size )
+
+```
+
+### KNN Cluster Plotting
+
+-  Plot to see how opening prices have been distributed in clusters.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+tradingDataPlot <- tradingData
+tradingDataPlot <- cbind(tradingDataPlot, cluster = as.factor(kmeanstest.temp$cluster))
+tradingDataPlot$cluster=factor(tradingDataPlot$cluster)
+centers=as.data.frame(kmeanstest.temp$centers)
+
+library(ggplot2)
+
+ggplot() +
+  geom_point(data = tradingDataPlot, 
+             mapping = aes(x = OPEN_P, 
+                           y = CHANGE, 
+                           colour = cluster)) +
+  geom_point(mapping = aes_string(x = kmeanstest.temp$centers[, "OPEN_P"], 
+                                  y = kmeanstest.temp$centers[, "CHANGE"]),
+             color = "red", size = 4) +
+  geom_text(mapping = aes_string(x = kmeanstest.temp$centers[, "OPEN_P"], 
+                                 y = kmeanstest.temp$centers[, "CHANGE"],
+                                 label = 1:7),
+            color = "black", size = 4) +
+  scale_x_continuous(limits = c(0,160))+
+  scale_y_continuous(limits = c(-100, 200))
+
+  #theme_light()
+```
+
+### Overall Insights 
+
+- KNN is a lazy learner where generalization of the training data is delayed until a query is made to the system. Which means knn starts working only when you trigger it to, thus lazy learning methods can construct a different approximation or result to the target function for each encountered query.   
+
+- It is a good method for online learning but it requires a possibly large amount of memory to store the data, and each request involves starting the identification of a local model from scratch.
+
+
+## ARIMA Forecasting Expedia Stock Price incorporating COVID-19 (Real Time) 
+
++ The goal of this project is to predict the future stock price of Expedia using various predictive forecasting models and then analysing the  models using ARIMA. 
++ The dataset for Expedia stocks is obtained from Yahoo Finance using Quantmod package in R. 
++ The timeline of the data is from 2019 till present day(11/26/2020). 
++ We shall also try and understand the impact of COVID-19 disaster on the stock prices of Expedia.
+
++  ***Forecasting ***
+
+    - A forecasting algorithm is a process that seeks to predict future values based on the past and present data. 
+    - This historical data points are extracted and prepared trying to predict future values for a selected variable of the dataset. 
+    
++  ***Data Preparation ***
+
+    - Importing the data : We obtain the data of Expedia from "2019-07-01" to "2020-11-26" of Expedia Stock price for our analysis using the quantmod package. To analyse the impact of COVID-19 on the Expedia Stock price, we take two sets of data from the quantmod package.
+
+    - Data from "2019-07-01" - "2020-03-28" is data before covid.
+    - Data from "2020-04-01" - "till date" is data before covid.
+ 
+    - All the analysis and the models will be made on both the datasets to analyse the impact of COVID-19, if any.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+library(quantmod)
+library(forecast)
+library(tseries)
+library(timeSeries)
+library(dplyr)
+library(readxl)
+library(kableExtra)
+library(data.table)
+library(DT)
+library(tsfknn)
+library(ggplot2)
+    
+getSymbols("EXPE", src = "yahoo", from = "2019-07-01", to = "2020-03-28")
+google_data_before_covid <- as.data.frame(EXPE)
+tsData_before_covid_close <- ts(google_data_before_covid$EXPE.Close)
+tsData_before_covid_start <- ts(google_data_before_covid$EXPE.Open)
+
+getSymbols("EXPE", src = "yahoo", from = "2020-04-01")
+google_data_after_covid <- as.data.frame(EXPE)
+tsData_after_covid_close <- ts(google_data_after_covid$EXPE.Close)
+tsData_after_covid_start <- ts(google_data_after_covid$EXPE.Open)
+
+as.data.frame(colnames(google_data_after_covid))
+
+```
+
+### Graphical Representation of Data  
+    
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+par(mfrow = c(2,2))
+plot.ts(tsData_before_covid_close, ylab = "Closing Price", main = "Before COVID-19 Closing Price")
+plot.ts(tsData_after_covid_close, ylab = "Closing Price", main = "During COVID-19 Closing Price")
+
+plot.ts(tsData_before_covid_start, ylab = "Open Price", main = "Before COVID-19 Opening Price")
+plot.ts(tsData_after_covid_start, ylab = "Open Price", main = "During COVID-19 Opening Price")
+
+```
+
+### ARIMA Model
+
++ Let us first analyse the ACF and PACF Graph of each of the two datasets.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+par(mfrow = c(2,2))
+acf(tsData_before_covid_close, main = "Before COVID-19 Closing Price")
+pacf(tsData_before_covid_close, main = "Before COVID-19 Closing Price")
+
+acf(tsData_after_covid_close, main = "During COVID-19 Opening Price")
+pacf(tsData_after_covid_close, main = "During COVID-19 Opening Price")
+
+```
+
++ We then use the auto.arima function to determine the time series model for each of the datasets.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+modelfit_before_covid <- auto.arima(tsData_before_covid_close, lambda = "auto")
+summary(modelfit_before_covid)
+```
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+modelfit_after_covid <- auto.arima(tsData_after_covid_close, lambda = "auto")
+summary(modelfit_after_covid)
+```
+
++ From the auto.arima function, we conclude the following models for the two datasets:
+
+   - Before COVID-19: ARIMA(3,1,2) 
+   - After COVID-19: ARIMA(1,1,0)
+   
++ After obtaining the model, we then perform residual diagnostics for each of the fitted models.
++ From the residual plot , we can confirm that the residual has a mean of 0 and the variance is constant as well . The ACF is 0 for lag> 0 , and the PACF is 0 as well.
+
++ So, we can say that the residual behaves like white noise and conclude that the models ARIMA(3,1,2) and ARIMA(1,1,0) fits the data well. Alternatively, we can also test at a significance level  using the Box-Ljung Test.
+
+### Diagnostic measures
+
++ Try to find out the pattern in the residuals of the chosen model by plotting the ACF of the residuals, and doing a portmanteau test. We need to try modified models if the plot doesn’t look like white noise.
+
++ Once the residuals look like white noise, calculate forecasts.
+
++ Box-Ljung test is a test of independence at all lags up to the one specified. Instead of testing randomness at each distinct lag, it tests the "overall" randomness based on a number of lags, and is therefore a portmanteau test. It is applied to the residuals of a fitted ARIMA model, not the original series, and in such applications the hypothesis actually being tested is that the residuals from the ARIMA model have no autocorrelation.
+
++ The ACF of the residuals shows no significant autocorrelations.
+
++ The p-values for the Ljung-Box Q test all are well above 0.05, indicating “non-significance.”
+The values are normal as they rest on a line and aren’t all over the place.
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+par(mfrow = c(1,1))
+plot(1,1,axes = FALSE)
+par(mfrow = c(1,1))
+
+plot(modelfit_before_covid$residuals, ylab = 'Residuals', main = "Residuals Before COVID-19")
+acf(modelfit_before_covid$residuals,ylim = c(-1,1), main = "ACF of the residuals shows no significant autocorrelations Before COVID-19")
+pacf(modelfit_before_covid$residuals,ylim = c(-1,1), main = "Before COVID-19")
+
+plot(modelfit_after_covid$residuals, ylab = 'Residuals', main = "After COVID-19")
+acf(modelfit_after_covid$residuals,ylim = c(-1,1), main = "ACF of the residuals shows no significant autocorrelations After COVID-19")
+pacf(modelfit_after_covid$residuals,ylim = c(-1,1), main = "After COVID-19")
+```
+
+
+### Augmented Dickey-Fuller & Kwiatkowski-Phillips-Schmidt-Shin
+
+ + We then conduct an ADF (Augmented Dickey-Fuller) test and KPSS (Kwiatkowski-Phillips-Schmidt-Shin) test to check for the stationarity of the time series data for both the datasets closing price.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+library(tseries)
+
+print(adf.test(tsData_before_covid_close))
+print(adf.test(tsData_after_covid_close))
+```
+ + From the above ADF tests, we can conclude the following:
+
+    - For the dataset before COVID-19, the ADF tests gives a p-value of 0.5279which is greater than 0.05, thus implying that the time series data is not stationary.
+
+    -  For the dataset after COVID-19, the ADF tests gives a p-value of 0.3817 which is lesser greater 0.05, thus implying that the time series data is not stationary.
+
+    
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+library(tseries)
+
+print(kpss.test(tsData_before_covid_close))
+print(kpss.test(tsData_after_covid_close))
+
+```   
+
++ From the above KPSS tests, we can conclude the following:
+
++ For the dataset before COVID-19, the KPSS tests gives a p-value of 0.01 which is less than 0.05, thus implying that the time series data is not stationary.
+
++ For the dataset after COVID-19, the KPSS tests gives a p-value of 0.01 which is less than 0.05, thus implying that the time series data is not stationary.
+
++ Thus, we can conclude from the above  tests that the time series data is not stationary.
+    
++ ***Forecasting with ARIMA Models ***
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+   
+   plotForecastErrors <- function(forecasterrors)
+{
+  # make a histogram of the forecast errors:
+  mybinsize <- IQR(forecasterrors)/4
+  mysd   <- sd(forecasterrors)
+  mymin  <- min(forecasterrors) - mysd*5
+  mymax  <- max(forecasterrors) + mysd*3
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  mynorm <- rnorm(10000, mean=0, sd=mysd)
+  mymin2 <- min(mynorm)
+  mymax2 <- max(mynorm)
+  if (mymin2 < mymin) { mymin <- mymin2 }
+  if (mymax2 > mymax) { mymax <- mymax2 }
+  # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+  mybins <- seq(mymin, mymax, mybinsize)
+  hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+  # freq=FALSE ensures the area under the histogram = 1
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+  # plot the normal curve as a blue line on top of the histogram of forecast errors:
+  points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+}
+```
+
++ Forecast errors for before covid dataset
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+plotForecastErrors(modelfit_before_covid$residuals) # make a histogram
+```
+
++ Forecast errors for after covid dataset
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+plotForecastErrors(modelfit_after_covid$residuals) # make a histogram
+```
+
++ ***Holt Winters ***
+
+  + To make forecasts using simple exponential smoothing in R, we can fit a simple exponential smoothing predictive model using the “HoltWinters()” function in R. To use HoltWinters() for simple exponential smoothing, we need to set the parameters beta=FALSE and gamma=FALSE in the HoltWinters() function (the beta and gamma parameters are used for Holt’s exponential smoothing, or Holt-Winters exponential smoothing, as described below).
+
+  +  HoltWinters() function returns a list variable, that contains several named elements.The output of HoltWinters() tells us that the estimated value of the alpha parameter is about 0.982813. 
+    
+  + We can plot the original time series.
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+
+skirtsseriesforecasts <- HoltWinters(tsData_before_covid_close, gamma=FALSE)
+skirtsseriesforecasts
+plot(skirtsseriesforecasts)
+```
+
++ As a measure of the accuracy of the forecasts, we can calculate the sum of squared errors for the in-sample forecast errors, that is, the forecast errors for the time period covered by our original time series. The sum-of-squared-errors is stored in a named element of the list variable “rainseriesforecasts” called “SSE”, so we can get its value by typing:
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+print("skirtsseriesforecasts$SSE" )
+print(skirtsseriesforecasts$SSE)
+
+```
+
+### Forecasting with HoltWinters
+
++  We can make forecasts for further time points by using the “forecast.HoltWinters()” function in the R “forecast” package. 
++  When using the forecast.HoltWinters() function, as its first argument (input), you pass it the predictive model that you have already fitted using the HoltWinters() function. 
++  You specify how many further time points you want to make forecasts for by using the “h” parameter in forecast.Here we are going to predict price for 45 days.
++ forecast.HoltWinters() function gives you the forecast for a year, a 80% prediction interval for the forecast, and a 95% prediction interval for the forecast. For example, the forecasted stock price for 233 day is about 20.96095, with a 95% prediction interval of (-56.8291332 98.75102).
+ 
+```{r, message = FALSE, echo=FALSE, warning=FALSE} 
+ library(forecast)
+souvenirtimeseriesforecasts2 <-forecast:::forecast.HoltWinters(skirtsseriesforecasts,h=45)
+print(souvenirtimeseriesforecasts2)
+```
+
++  To plot the predictions made by forecast.HoltWinters(), we can use the “plot.forecast()” function:
+```{r, message = FALSE, echo=FALSE, warning=FALSE} 
+ library(forecast)
+plot(souvenirtimeseriesforecasts2)
+```
++  Prediction for next ten days.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE} 
+m <- forecast(skirtsseriesforecasts)
+p <- predict(skirtsseriesforecasts, 10)   # predict 10 periods ahead
+plot(m, p)
+lines(tsData_before_covid_close)
+require(graphics)
+```
+
++ ***Ljung-Box Tests ***
+
++  Box Test for modelfit_after_covid$residuals.
++ To check for correlations between successive forecast errors, we can make a correlogram and use the Ljung-Box test.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE} 
+Box.test(modelfit_after_covid$residuals, type = "Ljung-Box")
+```
+
++  Box Test for  modelfit_before_covid$residuals
+```{r, message = FALSE, echo=FALSE, warning=FALSE} 
+Box.test(modelfit_before_covid$residuals, type = "Ljung-Box")
+```
+### Conclusion
+
+ Here, the p value for both the models is greater than 0.05 . Hence, at a significance level of 0.05 we fail to reject the null hypothesis and conclude that the residual follows white noise. This means that the model fits the data well.
+ 
+## Using a Neural Network to Model the Amazon Stock Price Change (Real Time Analysis)
+ 
+  + Artificial neural networks are very powerful and popular machine-learning algorithms that mimic how a brain works in order find patterns in your data.
+
+  + In this project, we will build a basic neural network to model the price change of Amazon stocks in real Time.
+
+  + ANNs make predictions by sending the inputs (in our case, the indicators) through the network of neurons, with the neurons firing off depending on the weights of the incoming signals. The final output is determined by the strength of the signals coming from the previous layer of neurons.
+
++ ***Data Import ***
+
+  + Use "quantmod" package to download information for Amazon stocks.
+  + Let’s see how we can quickly build a strategy using 4 technical indicators to see whether today’s price of Amazon’s stock .The 4 technical indicators are: 
+  
+  
+     - RSI -> Calculate a 3-period relative strength index (RSI) off the open price
+     - EMA -> Calculate a 5-period exponential moving average (EMA)
+     - MACD -> Calculate a MACD with standard parameters
+     - SMI -> Stochastic Oscillator with standard parameters
+      
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+
+library("quantmod")
+library("neuralnet")
+
+
+startDate<-as.Date('2000-01-01')
+endDate<-as.Date('2020-11-01')
+
+startDateAmazon<-as.Date('2000-01-01')
+endDateAmazon<-as.Date('2020-11-01')
+getSymbols("AMZN",src="yahoo",from=startDate,to=endDate)
+#Retrieve the data we need
+
+RSI3Amazon<-RSI(Op(AMZN),n=3)
+#Calculate a 3-period RSI
+
+EMA5Amazon<-EMA(Op(AMZN),n=5)
+EMAcrossAmazon<-Op(AMZN)-EMA5Amazon
+#Look at the difference between the open price and a 5-period EMA
+
+MACDAmazon<-MACD(Op(AMZN),fast = 12, slow = 26, signal = 9)
+MACDsignalAmazon<-MACDAmazon[,2]
+#Grab the signal line of the MACD
+
+
+BBAmazon<-BBands(Op(AMZN),n=20,sd=2)
+BBpAmazon<-BBAmazon[,4]
+#We will use the Bollinger Band %B, which measures the price relative to the upper and lower Bollinger Bands
+
+PriceAmazon<-Cl(AMZN)-Op(AMZN)
+#For this example we will be looking to predict the numeric change in price
+
+DataSetAmazon<-data.frame(RSI3Amazon,EMAcrossAmazon,MACDsignalAmazon,BBpAmazon,PriceAmazon)
+DataSetAmazon<-DataSetAmazon[-c(1:33),]
+colnames(DataSetAmazon)<-c("RSI3","EMAcross","MACDsignal","BollingerB","Price")
+#Create our data set, remove the data where the indicator values are being calculated, and name our columns
+
+combinedDfs <- rbind(DataSetAmazon)
+```      
+
+### Normalize Data
+ 
+ + One of the most important procedures when forming a neural network is data normalization. This involves adjusting the data to a common scale so as to accurately compare predicted and actual values. Failure to normalize the data will typically result in the prediction value remaining the same across all observations, regardless of the input values.
+ 
+ + Max-Min Normalization: For this method, we invoke the following function to normalize our data:
+  
+```{r, message = FALSE, echo=FALSE,warning=FALSE}
+Normalized <-function(x) {(x-min(x))/(max(x)-min(x))}
+NormalizedData<-as.data.frame(lapply(combinedDfs,Normalized))
+#We are normalizing our data to be bound between 0 and 1
+```
++  Data slicing: 
+
+     - Data slicing is a step to split data into train and test set. Training data set can be used specifically for our model building. Test dataset should not be mixed up while building model. Even during standardization, we should not standardize our test set.75 percent contributes to training &
+25 percent of data contributes to test.
+ 
+```{r, message = FALSE, echo=FALSE}
+library(tidyverse)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(caret)
+library(corrplot)
+library(caTools)
+library(party)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+
+set.seed(212)
+str(NormalizedData)
+trainIndex <- createDataPartition(NormalizedData$Price, p = 0.8, list=FALSE, times=3)
+subTrain <- NormalizedData[trainIndex,]
+subTest <- NormalizedData[-trainIndex,]
+```
++  TrainingParameters : 
+      -  train() method is passed with repeated cross-validation resampling method for 10 number of resampling iterations repeated for 3 times.
+
+```{r, message = FALSE, echo=FALSE}
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=3,classProbs = TRUE)
+```
+
+### Machine Learning: Classification using Neural Networks
+ 
++  Model Training
+      - We can us neuralnet() to train a NN model. Also, the train() function from caret can help us tune parameters. We can plot the result to see which set of parameters is fit our data the best.
+      - nnnet package by defualt uses the Logisitc Activation function.
+      - Data Pre-Processing With Caret: The scale transform calculates the standard deviation for an attribute and divides each value by that standard deviation.
+      - The center transform calculates the mean for an attribute and subtracts it from each value.
+      - Combining the scale and center transforms will standardize your data.
+      - Attributes will have a mean value of 0 and a standard deviation of 1.
+      - Training transforms can prepared and applied automatically during model evaluation.
+      - Transforms applied during training are prepared using the preProcess() and passed to the train() function via the preProcess argument.
+      - Backpropagation algorithm is a supervised learning method for multilayer feed-forward networks from the field of Artificial Neural Networks.
+      - The principle of the backpropagation approach is to model a given function by modifying internal weightings of input signals to produce an expected output signal. The system is trained using a supervised learning method, where the error between the system’s output and a known expected output is presented to the system and used to modify its internal state.
+      - We use Backpropagation as algorithm in neural network package.
+      
+```{r, message = FALSE, echo=TRUE}
+      
+nnetGrid <-  expand.grid(size = seq(from = 1, to = 5, by = 1)
+                         ,decay = seq(from = 0.1, to = 0.2, by = 0.1)
+)
+str(subTrain)
+nn_model <- train(Price~RSI3+EMAcross+MACDsignal+BollingerB, subTrain,
+                  method = "nnet",  algorithm = 'backprop',     
+                  trControl= TrainingParameters,
+                  preProcess=c("scale","center"),
+                  na.action = na.omit,
+                  tuneGrid = nnetGrid,
+                  trace=FALSE,
+                  verbose=FALSE)      
+```     
+    
+      - Based on the caret neural network model, train sets hidden layer.caret neural network picks
+the best neural network based on size, decay.
+      - We can visualize accuracy for different hidden layers below:
+
+```{r, message = FALSE, echo=FALSE}
+nn_model$results   
+plot(nn_model)
+```      
+      
+  + Prediction
+     - Now, our model is trained with accuracy = 0.8889 We are ready to predict classes for our test set. 
+
+```{r, message = FALSE, echo=FALSE}
+prediction <- predict(nn_model, subTest)  
+results <- data.frame(actual = subTest$Price, prediction = prediction)
+print(results)
+```     
+
+###  Accuracy of Neural Network model:
+
+   99% accuracy is acheived to predict the price using the stock technical indicators.
+   
+```{r, message = FALSE, echo=FALSE}
+print(subTest)
+predicted=results$prediction * abs(diff(range(subTest$Price))) + min(subTest$Price)
+actual=results$actual * abs(diff(range(subTest$Price))) + min(subTest$Price)
+comparison=data.frame(predicted,actual)
+deviation=((actual-predicted)/actual)
+print(deviation)
+comparison=data.frame(predicted,actual,deviation)
+accuracy=1-abs(mean(deviation))
+accuracy
+
+```    
+
+ - Plotting nnet variable importance
+```{r, message = FALSE, echo=FALSE}
+
+library(NeuralNetTools)
+varImp_nn<-varImp(nn_model)
+print(varImp_nn)
+ggplot(varImp_nn)
+plot(varImp_nn)
+
+```    
+#### Graphical Representation of our Neural Network
+  
+```{r, message = FALSE, echo=FALSE}
+library(NeuralNetTools)
+plotnet(nn_model, y_names = "Price")
+title("Graphical Representation of our Neural Network")
+```    
+
+### Conclusion
+From the above implementation, the results are impressive(99% accuracy) and convincing in terms of using a machine learning algorithm to decide on the price  of the stock Majority of the attributes in the dataset contribute significantly to the building of a predictive model. 
+
+
+## Using SVM to predict price change for WALMART (Real Time Analysis)
+
+### Machine Learning: Classification using SVM
+
+  + SVM is another classification method that can be used to predict if a client falls into either ‘yes’ or ‘no’ class.
+  + The linear, polynomial and RBF or Gaussian kernel in SVM are simply different in case of making the hyperplane decision boundary between the classes.
+  + The kernel functions are used to map the original dataset (linear/nonlinear ) into a higher dimensional space with view to making it linear dataset.
+  + Usually linear and polynomial kernels are less time consuming and provides less accuracy than the rbf or Gaussian kernels.
+  + The k cross validation is used to divide the training set into k distinct subsets. Then every subset is used for training and others k-1 are used for validation in the entire trainging phase. This is done for the better training of the classification task.Overall, if you are unsure which kernel method would be best, a good practice is use of something like 10-fold cross-validation for each training set and then pick the best algorithm.
+  
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+library(quantmod)
+library(lubridate)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+library(tidyverse)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(caret)
+library(corrplot)
+library(caTools)
+library(party)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+options(warn	= -1)
+library("quantmod")
+
+startDate = as.Date("1990-01-01")
+endDate = as.Date("2020-11-01")
+SYM3	<- 'WMT'
+STOCK3	<- getSymbols(
+  SYM3,
+  src	= "yahoo",
+  from	= startDate,
+  to	= endDate
+)
+RSIWalmart	<- RSI(Op(WMT),	n	= 3)
+#Calculate	a	3-period	relative	strength	index	(RSI)	off	the	open	price
+EMA5Walmart	<- EMA(Op(WMT),	n	= 5)
+#Calculate	a	5-period	exponential	moving	average	(EMA)
+EMAcrossWalmart	<- Op(WMT)	- EMA5Walmart
+#Let	us	explore	the	difference	between	the	open	price	and	our	5-period	EMA
+MACDWalmart	<- MACD(Op(WMT),
+                    fast	= 12,
+                    slow	= 26,
+                    signal	= 9)
+#Calculate	a	MACD	with	standard	parameters
+MACDWalmart	<- MACDWalmart[,	2]
+#Grab	just	the	signal	line	to	use	as	our	indicator.
+SMIWalmart	<- SMI(
+  Op(WMT),
+  n	= 13,
+  slow	= 25,
+  fast	= 2,
+  signal	= 9
+)
+#Stochastic	Oscillator	with	standard	parameters
+SMIWalmart	<- SMIWalmart[,	1]
+#Grab	just	the	oscillator	to	use	as	our	indicator
+WPRWalmart	<- WPR(Cl(WMT),	n	= 14)
+WPRWalmart	<- WPRWalmart[,	1]
+#Williams	%R	with	standard	parameters
+ADXWalmart	<- ADX(WMT,	n	= 14)
+ADXWalmart	<- ADXWalmart[,	1]
+#Average	Directional	Index	with	standard	parameters
+CCIWalmart	<- CCI(Cl(WMT),	n	= 14)
+CCIWalmart	<- CCIWalmart[,	1]
+#Commodity	Channel	Index	with	standard	parameters
+CMOWalmart	<- CMO(Cl(WMT),	n	= 14)
+CMOWalmart	<- CMOWalmart[,	1]
+#Collateralized	Mortgage	Obligation	with	standard	parameters
+ROCWalmart	<- ROC(Cl(WMT),	n	= 2)
+ROCWalmart	<- ROCWalmart[,	1]
+#Price	Rate	Of	Change	with	standard	parameters
+PriceChangeWalmart	<- Cl(WMT)	- Op(WMT)
+#Calculate	the	difference	between	the	close	price	and	open	price
+ClassWalmart	<- ifelse(PriceChangeWalmart	> 0,	'UP',	'DOWN')
+#Create	a	binary	classification	variable,	the	variable	we	are	trying	to	pre
+#dict.
+DataSetWalmart	<-
+  data.frame(ClassWalmart,	RSIWalmart,	EMAcrossWalmart,	MACDWalmart,	SMIWalmart,	WPRWalmart,	ADXWalmart,	CCIWalmart,	CMOWalmart,	ROCWalmart)
+#Create	our	data	set
+colnames(DataSetWalmart)	<-
+  c("Class",
+    "RSI",
+    "EMAcross",
+    "MACD",
+    "SMI",
+    "WPR",
+    "ADX",
+    "CCI",
+    "CMO",
+    "ROC")
+
+as.data.frame(colnames(DataSetWalmart))
+combinedDfs <- rbind(DataSetWalmart)
+
+combinedDfs$Class <- as.factor(combinedDfs$Class)
+combinedDfs$RSI <- as.numeric(combinedDfs$RSI)
+combinedDfs$ROC <- as.numeric(combinedDfs$ROC)
+combinedDfs$CMO <- as.numeric(combinedDfs$CMO)
+combinedDfs$CCI <- as.numeric(combinedDfs$CCI)
+combinedDfs$EMAcross <- as.numeric(combinedDfs$EMAcross)
+combinedDfs$MACD <- as.numeric(combinedDfs$MACD)
+combinedDfs$SMI <- as.numeric(combinedDfs$SMI)
+combinedDfs$WPR <- as.numeric(combinedDfs$WPR)
+combinedDfs$ADX <- as.numeric(combinedDfs$ADX)
+combinedDfs[is.na(combinedDfs$RSI), "RSI"] <- 0
+combinedDfs[is.na(combinedDfs$ROC), "ROC"] <- 0
+combinedDfs[is.na(combinedDfs$CMO), "CMO"] <- 0
+combinedDfs[is.na(combinedDfs$CCI), "CCI"] <- 0
+combinedDfs[is.na(combinedDfs$EMAcross), "EMAcross"] <- 0
+combinedDfs[is.na(combinedDfs$MACD), "MACD"] <- 0
+combinedDfs[is.na(combinedDfs$SMI), "SMI"] <- 0
+combinedDfs[is.na(combinedDfs$WPR), "WPR"] <- 0
+combinedDfs[is.na(combinedDfs$ADX), "ADX"] <- 0
+
+set.seed(212)
+trainIndexSVM <- createDataPartition(combinedDfs$Class, p = 0.8, list=FALSE, times=3)
+subTrainSVM <- combinedDfs[trainIndexSVM,]
+subTestSVM <- combinedDfs[-trainIndexSVM,]
+
+```
+
+
+### SVM Classifier using Linear Kernel
+
+  + Caret package provides train() method for training our data for various algorithms. We just need to pass different parameter values for different algorithms. Before train() method, we will first use trainControl() method.
+
+  + We are setting 3 parameters of trainControl() method. The "method" parameter holds the details about resampling method. We can set "method" with many values like  "boot", "boot632", "cv", "repeatedcv", "LOOCV", "LGOCV" etc. For this project, let’s try to use repeatedcv i.e, repeated cross-validation.
+
+  +  The "number" parameter holds the number of resampling iterations. The "repeats " parameter contains the complete sets of folds to compute for our repeated cross-validation. We are using setting number =10 and repeats =3. This trainControl() methods returns a list. We are going to pass this on our train() method.
+
+  + Before training our SVM classifier, set.seed().
+
+  +  For training SVM classifier, train() method should be passed with "method" parameter as "svmLinear". We are passing our target variable Term_Deposit. The "Term_Deposit.~." denotes a formula for using all attributes in our classifier and Term_Deposit. as the target variable. The "trControl" parameter should be passed with results from our trianControl() method. The “preProcess”  parameter is for preprocessing our training data.
+
+  + As discussed earlier for our data, preprocessing is a mandatory task. We are passing 2 values in our "preProcess" parameter "center" & "scale". These two help for centering and scaling the data. After preProcessing these convert our training data with mean value as approximately “0” and standard deviation as "1". The "tuneLength" parameter holds an integer value. This is for tuning our algorithm.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 1)
+set.seed(323)
+grid <- expand.grid(C = c( 0.25,0.5))
+svm_Linear_Grid <- train(	Class	~ RSI	+ EMAcross	+ WPR	+ ADX	+ CMO	+ CCI	+ ROC, data = subTrainSVM, method = "svmLinear",
+                          trControl=trctrl, preProcess = c("center", "scale"),
+                         tuneGrid = grid,
+                         tuneLength = 10)
+svm_Linear_Grid
+```
+ +  The above model is showing that our classifier is giving best accuracy on C = 0.25 Let’s try to make predictions using this model for our test set and check its accuracy.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+plot(svm_Linear_Grid)
+
+predictionsvm <- predict(svm_Linear_Grid, subTestSVM[-1]) 
+table(predictionsvm, subTestSVM$Class)   
+```
+
++ Accuracy on the test set by train control is 81% using C=0.25.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+accuracysvm <- sum(predictionsvm == (subTestSVM$Class))/length(subTestSVM$Class)
+print(accuracysvm)
+
+
+confusionNNSvm <-confusionMatrix(as.factor(predictionsvm),as.factor(subTestSVM$Class))
+print(confusionNNSvm)
+```
+  
+### SVM Classifier using Non-Linear Kernel
+  + Now, we will try to build a model using Non-Linear Kernel like Radial Basis Function. For using RBF kernel, we just need to change our train() method’s "method" parameter to "svmRadial". In Radial kernel, it needs to select proper value of Cost "C" parameter and "sigma" parameter.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+set.seed(323) 
+grid_radial <- expand.grid(sigma = c(0.5),
+                           C = c(0.25, 0.5))
+svm_Radial <- train(Class	~ RSI	+ EMAcross	+ WPR	+ ADX	+ CMO	+ CCI	+ ROC, data = subTrainSVM, method = "svmRadial",trControl=trctrl,preProcess = c("center", "scale"),
+                    tuneGrid = grid_radial,
+                    tuneLength = 2)
+svm_Radial
+```  
+  + SVM-RBF kernel calculates variations and will present us best values of sigma & C. Based on the output best values of sigma= 0.5 & C=0.5 Let’s check our trained models’ accuracy on the test set.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+predictionnonlinearsvm <- predict(svm_Radial, subTestSVM[-14])                          
+accuracynonlinearsvm <- sum(predictionnonlinearsvm == (subTestSVM$Class))/length(subTestSVM$Class)
+print(accuracynonlinearsvm)
+```  
+  + Final prediction accuracy on the test set is 0.7971014
+  
+### Comparision between SVM models
+
++ Comparision between SVM Linear and Radial Models.
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+library(ISLR)
+library(caret)
+library(readxl)
+library(pROC)
+library(lattice)
+library(ggplot2)
+library(dplyr)
+library(e1071) 
+library(corrplot)
+library(ggplot2)
+library(multiROC)
+library(MLeval)
+library(AppliedPredictiveModeling)
+library(corrplot)
+library(Hmisc)
+library(dplyr)
+library(quantmod) 
+
+library(nnet)
+library(caret)
+library(NeuralNetTools)
+
+algo_results <- resamples(list(SVM_RADIAL=svm_Radial, SVM_LINEAR=svm_Linear_Grid))
+
+summary(algo_results)
+
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(algo_results, scales=scales)
+
+```
+
+### Conclusion
+From the above implementation, the results are impressive and convincing in terms of using a machine learning algorithm to decide on the price change of  walmart . Majority of the attributes in the dataset contribute significantly to the building of a predictive model. All the two SVM approach acheives good accuracy rate(>80%) and are easier to implement.
+
+## Naive Bayes Sentimental Analysis of Twitter Data for Apple Stock
+
++ We will be trying to understand sentiment of tweets about the company Apple, By using the twitter for better understand public perception, Apple wants to monitor how people feel over time and how people receive new announcements.
+
++ Our challenge in this project is to see if we can correctly classify tweets as being negative, positive, or neither about Apple.
+
++ ***Sentiment Mining - Apple Stock***
+
+   - Apple wants to monitor how people feel about them over time, and how people receive new announcements.
+   - Challenge:Can we correctly classify tweets as being negative, positive, or neither about Apple?
+
++ ***Preprocessing of Text data***
+
+   - Change all the words in words in lower or upper
+   - remove punctuation
+   - remove stop words
+   - stemming
+   
++ ***Data***
+
+To collect the data needed for this task, we had to perform two steps.
+
+   - Collect Twitter data
+   - Construct the outcome variable for these tweets, which means that we have to label them as positive, negative, or neutral sentiment.These outcomes were represented as a number on the scale from -2 to 2.
+
+The following graph shows the distribution of the number of tweets classified into each of the categories. We can see here that the majority of tweets were classified as neutral, with a small number classified as strongly negative or strongly positive.
+
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+library(class)
+library(gmodels)
+library(caret)
+library(tidyverse)
+library(tokenizers)
+library(tidytext)
+library(wordcloud)
+library(tm)
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(stringr)
+library(caret)
+library(naivebayes)
+
+tweets=read.csv(file = "/Users/nselvarajan/Desktop/R/finals/datasets1/tweets.csv")
+
+tweets$positive = as.factor(tweets$Avg>=1)
+tweets$negative <- as.factor(tweets$Avg <= -1)
+hist(tweets$Avg,breaks = 5)
+```
+
+### Creating Corpus
+
++ One of fundamental concepts in text analysis, implemented in the package tm as well, is that of a corpus.A corpus is a collection of documents.
+
++ We will need to convert our tweets to a corpus for pre-processing. Various function in the tm package can be used to create a corpus in many different ways.
++ We will create it from the tweet column of our data frame using two functions, Corpus() and VectorSource(). We feed to this latter the Tweets variable of the tweets data frame.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+myCorpus <- Corpus(VectorSource((tweets$Tweet)))
+```
+
++ ***Pre-processing steps***
+
+   + To deal with text data following pre-processing is required.Follow the standard steps to build and pre-process the corpus:
+
+     - Build a new corpus variable called corpus.
+     - Using tm_map, convert the text to lowercase.
+     - Using tm_map, remove all punctuation from the corpus.
+     - Using tm_map, remove all English stopwords from the corpus.
+     - Using tm_map, stem the words in the corpus.
+
+   + Build a document term matrix from the corpus, called dtm.
+Each operation, like stemming or removing stop words, can be done with one line in R,
+where we use the tm_map() function which takes as its first argument the name of a corpus and
+as second argument a function performing the transformation that we want to apply to the text.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+corpus <- tm_map(myCorpus,removeNumbers)
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, tolower)
+corpus <- tm_map(corpus, stemDocument, language = 'english')
+corpus <- tm_map(corpus, removeWords, stopwords('english'))
+corpus <- tm_map(corpus, stripWhitespace)
+
+ratingpositive <- subset(tweets, tweets$Avg>=1) 
+myCorpusRating5 <- Corpus(VectorSource(ratingpositive$Tweet))
+myCorpusRating5 <- tm_map(myCorpusRating5,removeNumbers)
+myCorpusRating5 <- tm_map(myCorpusRating5, removePunctuation)
+myCorpusRating5 <- tm_map(myCorpusRating5, tolower)
+myCorpusRating5 <- tm_map(myCorpusRating5, stemDocument, language = 'english')
+myCorpusRating5 <- tm_map(myCorpusRating5, removeWords, stopwords('english'))
+myCorpusRating5 <- tm_map(myCorpusRating5, stripWhitespace)
+
+
+
+```
+### Positive Bag Of Words 
++ Create a Document Term Matrix
++ We are now ready to extract the word frequencies to be used in our prediction problem. The tm package provides a function called DocumentTermMatrix() that generates a matrix where:
+  - the rows correspond to documents, in our case tweets, and
+  - the columns correspond to words in those tweets.
+  - The values in the matrix are the number of times that word appears in each document.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+bag_of_words_rating_5 <- DocumentTermMatrix(myCorpusRating5)    
+```
+
++ Create word cloud for postive tweets
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+dataframeRating5<-data.frame(text=unlist(sapply(myCorpusRating5, `[`)), stringsAsFactors=F) ##creating data fram from matrix 
+y<-head(dataframeRating5,100)
+str(y)
+# word cloud visualization
+library(wordcloud)
+wordcloud(y$text)
+```
+
+### Negative Bag Of Words & wordcloud for negative
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+bag_of_words <- DocumentTermMatrix(corpus)  ##creating DTM to get frequencies
+inspect(bag_of_words)
+
+dataframe<-data.frame(text=unlist(sapply(corpus, `[`)), stringsAsFactors=F) ##creating data fram from matrix 
+tweets$text <- dataframe$text
+y<-head(tweets,100)
+
+# word cloud visualization
+library(wordcloud)
+wordcloud(y$text)
+```
+
++  ***Building machine learning model***
+   - Before Building the machine learning model, we need to split our data in training and training dataset split data in training/testing sets
+   - Lastly, let's split our data into a training set and a testing set, putting 70% of the data in the training set. 
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+dataset_train <- tweets[1:880,]      ###dividing data into training and test set
+dataset_test <- tweets[880:1181,]
+myCorpus_model_train <- Corpus(VectorSource(dataset_train$text)) ##creating corpus for training
+
+dtm_train <- DocumentTermMatrix(myCorpus_model_train) ##since this data was already cleaned before, we can straigtaway move to DTM
+dtm_train <- removeSparseTerms(dtm_train,0.95)
+
+myCorpus_model_test <- Corpus(VectorSource(dataset_test$text)) ##creating corpus for test
+
+dtm_test <- DocumentTermMatrix(myCorpus_model_test) ##since this data was already cleaned before, we can straigtaway move to DTM
+dtm_test <- removeSparseTerms(dtm_test,0.95)
+```
+
++ ***Making predictions***
+
+   -  We build Naive Bayes by using training & test data sets. 
+   - We apply Laplace smoothing , which is a technique for smoothing categorical data.
+   - A small-sample correction, or pseudo-count, will be incorporated in every probability
+    estimate. Consequently, no probability will be zero. this is a way of regularizing Naive Bayes, 
+    and when the pseudo-count is zero, it is called Laplace smoothing. 
+```{r, message = FALSE, echo=TRUE,warning= FALSE}
+
+model <- naive_bayes(as.data.frame(as.matrix(dtm_train)), dataset_train$positive, laplace = 1)
+```
+### Interpretation of the results and prediction accuracy achieved
+ + ***Evaluate the model performance using confusionMatrix***
+ + The accuracy of our model on the testing set is 78%.
+ + We can visualise the model’s performance using a confusion matrix.
+ + We can evaluvate the accuracy, precision and recall on the training and validation sets 
+ to evaluate the performance of naive bayes algorithm.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+model_predict <- predict(model, as.data.frame(as.matrix(dtm_test)))
+confusionMatrix(model_predict, dataset_test$positive)
+
+```
+ + ***Evaluate the model performance using CrossTable ***
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+library(gmodels)
+CrossTable(model_predict, dataset_test$positive,
+           prop.chisq = FALSE, prop.t = FALSE, prop.r = FALSE,
+           dnn = c('predicted', 'actual'))
+```
++ ***Find 25 frequent words***
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+library(Rgraphviz)
+findFreqTerms(dtm_train, lowfreq = 25)
+```
+
+### Overall insights obtained from the implemented project 
+
+ + Overall accuracy of the model is 78%.It is safe to assume that naive bayes models can be trained on to find the sentiment of the stocks.
+ + Sensitivity for finding ratings is 0.7848. 
+ + Since the dataset was clean, and reviews are equally distributed between test & training set, adding laplace smoothing factor did not make much difference in the accuracy.  
+
+## Amazon Price Trend Predict - Random Forest (Real Time Analysis) 
+
+ + Stock market prediction is an incredibly difficult task, due to the randomness and noisiness found in the market. Yet, predicting market behaviors is a very important task. Correctly predicting stock price directions can be used to maximize profits, as well as to minimize risk. There are two types of methods to predicting market behavior. One is predicting the future price of an asset. This is usually done using time series analysis to fit a specific model, like ARIMA or GARCH, to some historical data. The other is predicting the future trend of an asset. That is, whether one thinks it will go up or down in price, treating it as a classification problem.
+
+ + The goal of this project is to create an intelligent model, using the Random Forest model, that can correctly forecast the behavior of a stock’s price n days out.
+
++ ***Data Import ***
+
+  + Use "quantmod" package to download information for Amazon stocks.
+  + The data used for this project consists of regular stock data (open, close, volume, etc.) from Yahoo finance, and ranges from the year 2000 to 2018. 
+  + From this data, technical indicators were calculated for every stock. Below are all the technical indicators used for this model:
+
+        - Relative Strength Index
+        - Stochastic Oscillator
+        - William %R
+        - Moving Average Convergence Divergence
+        - Price Rate of Change
+        - On Balance Volume
+
+  + The last step of pre-processing the data was calculating the response variable. Since we are treating this as a classification problem, the response variable was binary. The equation for calculating the response variable is below:Response=Closet+n−Closet
+
+  + It states that the adjusted close price at t+n, where n is the number of days out you want to predict, minus the current adjusted close price will map to a value that says the stock price went up from the point at time t, or that it went down. 
+  
+  
+### Methadology  
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+library(quantmod)
+library(randomForest)
+
+# Importing the dataset
+startDate = as.Date("2011-01-01")
+endDate = as.Date("2020-06-30") 
+getSymbols("^GSPC",src="yahoo",from=startDate,to=endDate) 
+dataset=data.frame(GSPC)
+
+#RSI indicator
+relativeStrengthIndex20=RSI(Op(GSPC),n=20)
+plot(relativeStrengthIndex20)
+
+# Exponential Moving Average Indicator
+exponentialMovingAverage20=EMA(Op(GSPC),n=20)
+plot(exponentialMovingAverage20)
+
+# Difference in Exponential Moving Average
+exponentialMovingAverageDiff <- Op(GSPC) - exponentialMovingAverage20
+plot(exponentialMovingAverageDiff)
+
+# MACD Indicator
+MACD <- MACD(Op(GSPC),fast = 12, slow = 26, signal = 9, type = "EMA", histogram = TRUE)
+plot(MACD)
+MACDsignal <- MACD[,2]
+plot(MACDsignal)
+
+# Bollinger Band indicator
+BollingerBands <- BBands(Op(GSPC),n=20,sd=2)
+plot(BollingerBands)
+
+# % Change BB
+PercentageChngpctB <- BollingerBands[,4]
+plot(PercentageChngpctB)
+
+# Price (Closes above Open = 1, Closes below Open = 0)
+Price=ifelse(dataset[4]>dataset[1], 1,0)
+plot(Price)
+```
+
++ Dataset used for this project: 
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+dataset1<-data.frame(relativeStrengthIndex20, exponentialMovingAverage20, MACDsignal, PercentageChngpctB, Price)
+# Size of Data
+print(as.data.frame(colnames(dataset1)))
+
+```
++ Check for missing data in relativeStrengthIndex20, exponentialMovingAverage20, MACDsignal, PercentageChngpctB, Price. Omit the n/a values in dataset.
+
++ Print the number of missed value for each attribute in dataset.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+#Checking for missing data
+d3=dataset1
+for(i in 1:ncol(d3))
+   {
+    print(colnames(d3[i]))
+    print(sum(is.na(d3[i])))
+   }
+
+dataset1 = na.omit(dataset1)
+
+colnames(dataset1)=c ("RSI20", "EMA20", "MACDsignal", "BB", "Price")
+
+# Exploring the data set components
+# Encoding the target feature as factor
+dataset1$Price=factor(dataset1$Price, levels = c(0, 1))
+
+```
+
++ RandoM Forest Machine Learning Model
+
+  - Split the dataset into training & test dataset.80 % of the data is training data.20 % of the data is test dataset.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+
+# Splitting the dataset into the Training set and Test set
+library(caTools)
+set.seed(123)
+split = sample.split(dataset1$Price, SplitRatio = 0.8)
+training_set = subset(dataset1, split == TRUE)
+test_set = subset(dataset1, split == FALSE)
+```
+  -  Feature Scaling -> Normalization /Scale and dropping the feature varaibles.
+  
+```{r, message = FALSE, echo=TRUE,warning= FALSE}
+
+# Feature Scaling (Normalization and dropping the predicted variable)
+training_set[-5] = scale(training_set[-5])
+test_set[-5] = scale(test_set[-5])
+```
+  -  Applying Random Forest Model on the Training set. 
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+classifier = randomForest(x = training_set[-5],
+                          y  = training_set[,5],
+                          ntree = 10)
+summary(classifier)
+plot(classifier)
+```
+
+### Prediction & Accuracy.  
+    - After building the model, then we can check the accuracy of forecasting using confusion matrix.
+    - Final Model Accuracy of the model is 51 percent.
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+# Predicting the Test set results
+predict_val = predict(classifier, newdata = test_set[-5])
+
+# Confusion Matrix
+cm = table(test_set[, 5], predict_val)
+print(cm)
+# Evaluating Model Accuracy on test data set using Confusion Matrix
+Model_Accuracy=(cm[1,1] + cm[2,2])/ (cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2])
+print("Model Accuracy is") 
+print(Model_Accuracy)
+
+```
+
+### Ensemble Method for Random Forest
+
+```{r, message = FALSE, echo=FALSE,warning= FALSE}
+
+grid <- expand.grid(.mtry = c(3, 6, 9))
+
+ctrl <-
+  trainControl(method = "cv",
+               number = 3,
+               selectionFunction = "best")
+
+set.seed(123)
+
+rf.mod <-
+  train(
+    Price ~ RSI20 + EMA20 + MACDsignal+BB,
+    data = training_set,
+    method = "rf",
+    metric = "Kappa",
+    trControl = ctrl,
+    tuneGrid = grid
+  )
+rf.mod
+
+```
+
+### Overall insights obtained from the implemented project
+
++  As we can see, the model has the highest accuracy of 51 percent . While this may not seem any good, it is often extremely hard to predict the price of stocks. Even the 2.5% improvement over random guessing can make a difference given the amount of money at stake. After all, if it was that easy to predict the prices, wouldn’t we all be trading in stocks for the easy money instead of learning these algorithms?
+
+## Discussion and Conclusions
+
+- This is a beginning of the use of ML algorithms for predicting the time series data or the stock prices.It can be modified and optimized in a lot of ways to produce much better and much more efficient and accurate results.
+
+- Choosing the right technical indicators which will influence the price change is daunting.In this
+project we tried to predict the price change through variety of technical indicators in different ML algorithms. 
+
+- Although we have acheived accuracy of 80 percent in many ML algorithms and used ensembles to improve accuracy, there are  many other things that impact the prices of stocks such as:Political and social upheavals ,current affairs etc
+
+- Thus, we can say stock market price change is quite a dynamic movement. 
+
